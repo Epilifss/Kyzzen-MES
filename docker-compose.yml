@@ -1,0 +1,17 @@
+services:
+  # Serviço do Banco de Dados
+  db:
+    image: postgres:15
+    container_name: KYZZEN_DB
+    restart: always
+    environment:
+      POSTGRES_USER: kyzzen_admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: kyzzen_db
+    ports:
+      - "5433:5432" # Mapeia a porta do PC para a do contêiner
+    volumes:
+      - pgdata:/var/lib/postgresql/data # Garante que os dados não sumam ao desligar
+
+volumes:
+  pgdata:
