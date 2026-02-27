@@ -9,7 +9,8 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     full_name = Column(String)
     password_hash = Column(String)
-    role = Column(String, default="operator")
+    workstation_id = Column(Integer, ForeignKey("workstations.id"))
+    role = Column(String)
     total_points = Column(Integer, default=0)
 
 class Product(Base):

@@ -1,7 +1,10 @@
 import models, schemas
 from database import engine, get_db
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+import auth
 from typing import List
 
 # ATENÇÃO: A linha abaixo apaga o banco para recriar com as novas colunas.
@@ -36,7 +39,8 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     new_user = models.User(
         username=user.username,
         full_name=user.full_name,
-        password_hash=user.password,
+        password_hash=auth.get_psw_hash(user.password),
+        workstation_id=user.workstation_id,
         role=user.role
     )
     db.add(new_user)
@@ -72,6 +76,10 @@ def create_workstation(workstation: schemas.WorkstationCreate, db: Session = Dep
     db.commit()
     db.refresh(new_workstation)
     return new_workstation
+
+@app.get("/departments/")
+def get_departments(db: Session = Depends(get_db)):
+    return db.query(models.Workstation).all()
 
 # --- ROTAS DE PRODUTOS ---
 
@@ -115,7 +123,6 @@ def log_production(log: schemas.ProductionLogCreate, db: Session = Depends(get_d
 
 @app.post("/production/finish/")
 def finish_production(log_id: int, db: Session = Depends(get_db)):
-    # 1. Busca o log existente
     db_log = db.query(models.ProductionLog).filter(models.ProductionLog.id == log_id).first()
     
     if not db_log:
@@ -124,19 +131,46 @@ def finish_production(log_id: int, db: Session = Depends(get_db)):
     if db_log.status == "finished":
         raise HTTPException(status_code=400, detail="Esta peça já foi contabilizada como finalizada")
 
-    # 2. Atualiza o status
     db_log.status = "finished"
     
-    # 3. Lógica de Pontuação: 
-    # Aqui poderíamos atualizar uma tabela de 'Ranking' ou 'TotalPoints' do usuário
     user = db.query(models.User).filter(models.User.id == db_log.user_id).first()
     product = db.query(models.Product).filter(models.Product.id == db_log.product_id).first()
     
     points_earned = product.base_points * db_log.quantity
-    user.total_points += points_earned # Assume que adicionamos 'total_points' ao modelo User
+    user.total_points += points_earned
 
     db.commit()
     return {
         "status": "Sucesso", 
         "message": f"Produto finalizado. {points_earned} pontos atribuídos ao operador {user.username}."
     }
+
+# --- ROTA DE AUTENTICAÇÃO ---
+
+@app.post("/token")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    
+    if not user or not auth.verify_psw(form_data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
+    
+    access_token = auth.create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# --- ROTA DE RANKINGS ---
+
+@app.get("/ranking/") # Verifique se tem a barra aqui
+def get_ranking(db: Session = Depends(get_db)):
+    ranking = (
+        db.query(
+            models.User.username,
+            func.sum(models.Product.base_points * models.ProductionLog.quantity).label("total_points")
+        )
+        .join(models.ProductionLog, models.User.id == models.ProductionLog.user_id)
+        .join(models.Product, models.Product.id == models.ProductionLog.product_id)
+        .filter(models.ProductionLog.status == "finished")
+        .group_by(models.User.username)
+        .order_by(func.sum(models.Product.base_points * models.ProductionLog.quantity).desc())
+        .all()
+    )
+    return [{"username": r.username, "points": r.total_points} for r in ranking]

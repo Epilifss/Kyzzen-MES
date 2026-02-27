@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     username: str
     full_name: str
     password: str
+    workstation_id: int
     role: Optional[str] = "operator"
 
 # Esquema para ler um Usuário (o que a API devolve)
@@ -53,5 +54,6 @@ class WorkstationOut(BaseModel):
 
 # Esquema para retorno de Setor
 class WorkstationCreate(BaseModel):
+    id: int
     name: str
     head: str
