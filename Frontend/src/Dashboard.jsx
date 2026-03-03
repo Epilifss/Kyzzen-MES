@@ -50,7 +50,7 @@ function Dashboard() {
               {ranking.map((op, index) => (
                 <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '10px' }}>{op.username}</td>
-                  <td style={{ padding: '10px' }}>{op.workstation}</td>
+                  <td style={{ padding: '10px' }}>{op.workstation_name}</td>
                   <td style={{ padding: '10px', fontWeight: 'bold' }}>{op.points} pts</td>
                 </tr>
               ))}

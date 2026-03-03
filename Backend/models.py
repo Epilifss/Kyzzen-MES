@@ -10,6 +10,7 @@ class User(Base):
     full_name = Column(String)
     password_hash = Column(String)
     workstation_id = Column(Integer, ForeignKey("workstations.id"))
+    workstation = relationship("Workstation")
     role = Column(String)
     total_points = Column(Integer, default=0)
 

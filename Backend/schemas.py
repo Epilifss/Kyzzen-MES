@@ -10,15 +10,25 @@ class UserCreate(BaseModel):
     workstation_id: int
     role: Optional[str] = "operator"
 
+# Esquema para criar um setor
+class WorkstationOut(BaseModel):
+    id: int
+    name: str
+    head: str
+
+    class Config:
+        from_attributes = True
+
 # Esquema para ler um Usuário (o que a API devolve)
 class UserOut(BaseModel):
     id: int
     username: str
     full_name: str
     role: str
+    workstation_name: str
 
     class Config:
-        from_attributes = True # Permite converter do SQLAlchemy para Pydantic
+        from_attributes = True
 
 # Esquema para criar um Produto
 class ProductCreate(BaseModel):
@@ -42,15 +52,6 @@ class ProductionLogCreate(BaseModel):
     workstation_id: int
     product_id: int
     quantity: float
-
-# Esquema para criar um setor
-class WorkstationOut(BaseModel):
-    id: int
-    name: str
-    head: str
-
-    class Config:
-        from_attributes = True
 
 # Esquema para retorno de Setor
 class WorkstationCreate(BaseModel):

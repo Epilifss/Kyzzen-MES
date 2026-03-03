@@ -15,11 +15,24 @@ app = FastAPI()
 
 # --- ROTAS DE USUÁRIOS ---
 
-@app.get("/users/", response_model=List[schemas.UserOut])
-def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # Lista todos os usuários cadastrados
-    users = db.query(models.User).offset(skip).limit(limit).all()
-    return users
+@app.get("/users/", response_model=list[schemas.UserOut])
+def get_users(db: Session = Depends(get_db)):
+    # Buscamos todos os usuários
+    users = db.query(models.User).all()
+    
+    # Criamos uma lista formatada para o Schema UserOut
+    results = []
+    for user in users:
+        results.append({
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role,
+            # Se a relação estiver no models.py, o SQLAlchemy busca o nome automaticamente
+            "workstation_name": user.workstation.name if user.workstation else "Sem Setor"
+        })
+    
+    return results
 
 @app.get("/users/{user_id}", response_model=schemas.UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -31,22 +44,37 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 @app.post("/users/", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Verifica se usuário já existe
+    # 1. Verificar se o usuário já existe
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-    
+
+    # 2. Buscar a workstation no banco para pegar o nome dela
+    workstation = db.query(models.Workstation).filter(models.Workstation.id == user.workstation_id).first()
+    if not workstation:
+        raise HTTPException(status_code=404, detail="Workstation not found")
+
+    # 3. Criar o novo usuário (Salvando o ID no banco)
     new_user = models.User(
         username=user.username,
         full_name=user.full_name,
         password_hash=auth.get_psw_hash(user.password),
-        workstation_id=user.workstation_id,
+        workstation_id=user.workstation_id, # Salva o número 0, 1, 2...
         role=user.role
     )
+    
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return new_user
+
+    # 4. Retornar os dados no formato que o UserOut espera (com o nome)
+    return {
+        "id": new_user.id,
+        "username": new_user.username,
+        "full_name": new_user.full_name,
+        "role": new_user.role,
+        "workstation_name": workstation.name # Aqui enviamos o "Nome" em vez do "ID"
+    }
 
 @app.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
