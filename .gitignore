@@ -1,0 +1,4 @@
+.venv
+.vscode
+*.pyc
+*node_modules
