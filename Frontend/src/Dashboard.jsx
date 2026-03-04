@@ -36,7 +36,7 @@ function Dashboard() {
         {/* Card de Ranking */}
         <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', backgroundColor: '#2563eb' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Trophy color="#f59e0b" /> Ranking de Produtividade
+            <Trophy color="#f59e0b" /> Meu ranking de Produtividade
           </h2>
           <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
             <thead>

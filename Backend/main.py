@@ -7,7 +7,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 import auth
 from typing import List
 
-# ATENÇÃO: A linha abaixo apaga o banco para recriar com as novas colunas.
 # models.Base.metadata.drop_all(bind=engine) 
 models.Base.metadata.create_all(bind=engine)
 
@@ -17,10 +16,8 @@ app = FastAPI()
 
 @app.get("/users/", response_model=list[schemas.UserOut])
 def get_users(db: Session = Depends(get_db)):
-    # Buscamos todos os usuários
     users = db.query(models.User).all()
     
-    # Criamos uma lista formatada para o Schema UserOut
     results = []
     for user in users:
         results.append({
@@ -28,7 +25,6 @@ def get_users(db: Session = Depends(get_db)):
             "username": user.username,
             "full_name": user.full_name,
             "role": user.role,
-            # Se a relação estiver no models.py, o SQLAlchemy busca o nome automaticamente
             "workstation_name": user.workstation.name if user.workstation else "Sem Setor"
         })
     
@@ -196,7 +192,7 @@ def get_ranking(db: Session = Depends(get_db)):
         )
         .join(models.ProductionLog, models.User.id == models.ProductionLog.user_id)
         .join(models.Product, models.Product.id == models.ProductionLog.product_id)
-        .filter(models.ProductionLog.status == "finished")
+        # .filter(models.ProductionLog.status == "finished")
         .group_by(models.User.username)
         .order_by(func.sum(models.Product.base_points * models.ProductionLog.quantity).desc())
         .all()
