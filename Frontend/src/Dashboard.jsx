@@ -24,7 +24,7 @@ function Dashboard() {
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+    <div style={{width:'100%', padding: '20px', fontFamily: 'sans-serif' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1>Kyzzen <span style={{ color: '#2563eb' }}>MES</span></h1>
         <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
@@ -36,7 +36,7 @@ function Dashboard() {
         {/* Card de Ranking */}
         <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', backgroundColor: '#2563eb' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Trophy color="#f59e0b" /> Meu ranking de Produtividade
+            <Trophy color="#f59e0b" /> Ranking de Produtividade
           </h2>
           <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
             <thead>

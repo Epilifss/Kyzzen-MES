@@ -14,6 +14,20 @@ function ModalNewUser({ show, handleClose, refreshList }) {
     const [workstation, setworkstation] = useState('0');
     const [role, setRole] = useState('Admin');
 
+    const cancel = async (e) => {
+        if (e) e.preventDefault();
+
+        try {
+            handleClose();
+
+            setUsername('');
+            setFullname('');
+            setPassword('');
+        } catch (error) {
+            console.log("Erro ao limpar os campos: " + error.response?.data?.detail)
+        }
+    }
+
     const csl = async (e) => {
         if (e) e.preventDefault();
 
@@ -29,14 +43,11 @@ function ModalNewUser({ show, handleClose, refreshList }) {
 
             const response = await api.post('/users/', dadosParaEnviar);
 
-            console.log("Dados capturados:", dadosParaEnviar);
             if (response.status === 201 || response.status === 200) {
                 refreshList();
 
-                // 1. Fecha o modal
                 handleClose();
 
-                // 2. Opcional: Limpa os campos para a próxima vez que abrir
                 setUsername('');
                 setFullname('');
                 setPassword('');
@@ -110,7 +121,7 @@ function ModalNewUser({ show, handleClose, refreshList }) {
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button variant="secondary" onClick={handleClose} style={{ backgroundColor: 'red' }}>
+                    <Button variant="secondary" onClick={() => {cancel(); handleClose() }} style={{ backgroundColor: 'red' }}>
                         Cancelar
                     </Button>
                     <Button variant="primary" onClick={() => { csl(); handleClose() }}>

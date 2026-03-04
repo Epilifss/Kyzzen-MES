@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from './api';
-import { LogOut, Activity } from 'lucide-react';
-import { CiUser } from "react-icons/ci";
+import { CircleFadingPlus, Activity } from 'lucide-react';
+import { CiCirclePlus, CiUser } from "react-icons/ci";
 import ModalNewUser from "./modais";
 
 function AdmPanel() {
@@ -27,23 +27,23 @@ function AdmPanel() {
     };
 
     return (
-        <div style={{ padding: '20px', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                <h1>Kyzzen <span style={{ color: '#2563eb' }}>MES</span></h1>
-                <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                    <LogOut size={18} /> Sair
-                </button>
-            </header>
+        <div style={{width:'100%', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
 
 
-            <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', backgroundColor: '#2563eb' }}>
+            <div>
 
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <CiUser color="#f59e0b" /> Usuários
+                
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color:'#3f4d67' }}>
+                    <CiUser color="#3f4d67" /> Usuários
                 </h2>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button variant='primary' onClick={() => setShowModal(true)} style={{padding: '10px', borderRadius: '10px', backgroundColor:'#3f4d67', fontSize:'15px' }}> <CiCirclePlus/> Novo Usuário </button>
+                </div>
+
                 <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
                     <thead>
-                        <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+                        <tr style={{ borderBottom: '2px solid #3f4d67', textAlign: 'left', color:'#3f4d67' }}>
                             <th style={{ padding: '10px' }}>ID</th>
                             <th style={{ padding: '10px' }}>Nome</th>
                             <th style={{ padding: '10px' }}>Setor</th>
@@ -52,7 +52,7 @@ function AdmPanel() {
                     </thead>
                     <tbody>
                         {users.map((op, index) => (
-                            <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
+                            <tr key={index} style={{ borderBottom: '1px solid #3f4d67', color:'#3f4d67' }}>
                                 <td style={{ padding: '10px' }}>{op.id}</td>
                                 <td style={{ padding: '10px' }}>{op.username}</td>
                                 <td style={{ padding: '10px' }}>{op.workstation_name}</td>
@@ -64,11 +64,8 @@ function AdmPanel() {
 
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button variant='primary' onClick={() => setShowModal(true)} style={{ margin: ('0px', '10px'), padding: '10px' }}>Novo usuário</button>
-            </div>
 
-            <ModalNewUser show={showModal} handleClose={() => setShowModal(false)} refreshList={fetchUsers}/>
+            <ModalNewUser show={showModal} handleClose={() => setShowModal(false)} refreshList={fetchUsers} />
         </div>
     );
 }
