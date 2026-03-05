@@ -6,7 +6,7 @@ import Modal from 'react-bootstrap/Modal';
 
 import api from './api';
 
-function ModalNewUser({ show, handleClose, refreshList }) {
+export function ModalNewUser({ show, handleClose, refreshList }) {
 
     const [username, setUsername] = useState('');
     const [fullname, setFullname] = useState('');
@@ -121,7 +121,7 @@ function ModalNewUser({ show, handleClose, refreshList }) {
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button variant="secondary" onClick={() => {cancel(); handleClose() }} style={{ backgroundColor: 'red' }}>
+                    <Button variant="secondary" onClick={() => { cancel(); handleClose() }} style={{ backgroundColor: 'red' }}>
                         Cancelar
                     </Button>
                     <Button variant="primary" onClick={() => { csl(); handleClose() }}>
@@ -133,4 +133,104 @@ function ModalNewUser({ show, handleClose, refreshList }) {
     );
 }
 
-export default ModalNewUser;
+export function ModalNewWorkstation({ show, handleClose, refreshList }) {
+
+    const [workstationName, setWorkstationName] = useState('');
+    const [workstationHead, setWorkstationHead] = useState('0');
+
+    const cancel = async (e) => {
+        if (e) e.preventDefault();
+
+        try {
+            handleClose();
+
+            setWorkstationName('');
+            setWorkstationHead('');
+        } catch (error) {
+            console.log("Erro ao limpar os campos: " + error.response?.data?.detail)
+        }
+    }
+
+    const csl = async (e) => {
+        if (e) e.preventDefault();
+
+        try {
+
+            const dadosParaEnviar = {
+                name: workstationName,
+                head: workstationHead
+            };
+
+            const response = await api.post('/workstations/', dadosParaEnviar);
+
+            if (response.status === 201 || response.status === 200) {
+                refreshList();
+
+                handleClose();
+
+                setWorkstationName('');
+                setWorkstationHead('');
+
+            }
+        } catch (error) {
+            alert('Erro ao tentar criar novo setor: ' + error.response?.data?.detail);
+        }
+
+
+
+    }
+
+    return (
+        <>
+            <Modal show={show} onHide={handleClose}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Criar novo usuário</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Nome</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={workstationName}
+                                onChange={(e) => setWorkstationName(e.target.value)}
+                                autoFocus
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Encarregado</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={workstationHead}
+                                onChange={(e) => setWorkstationHead(e.target.value)}
+                            />
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => { cancel(); handleClose() }} style={{ backgroundColor: 'red' }}>
+                        Cancelar
+                    </Button>
+                    <Button variant="primary" onClick={() => { csl(); handleClose() }}>
+                        Adicionar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+        </>
+    );
+}
+
+export function ConfirmDelItem({ show, handleClose, onConfirm }) {
+    return (
+        <Modal show={show} onHide={handleClose}>
+            <Modal.Header closeButton>
+                <Modal.Title>Tem certeza?</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>Essa ação não poderá ser desfeita.</Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={handleClose}>Cancelar</Button>
+                <Button variant="danger" onClick={onConfirm}>Sim, deletar.</Button>
+            </Modal.Footer>
+        </Modal>
+    );
+}

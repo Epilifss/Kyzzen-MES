@@ -25,24 +25,22 @@ const Sidebar = () => {
               <span>Início</span>
             </div>
           </NavLink>
-          <div className="menu-item">
-            <ClipboardList size={20} />
-            <span>Chamados</span>
-          </div>
         </div>
 
         <div className="menu-section">
           <p className="section-title">CONFIGURAÇÕES</p>
-          <NavLink to="/admin" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+          <NavLink to="/users" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
             <div className="menu-item">
               <Users size={20} />
               <span>Usuários</span>
             </div>
           </NavLink>
-          <div className="menu-item">
-            <Wrench size={20} />
-            <span>Workstations</span>
-          </div>
+            <NavLink to="/workstations" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+            <div className="menu-item">
+              <Users size={20} />
+              <span>Setores</span>
+            </div>
+          </NavLink>
           <div className="menu-item">
             <Settings size={20} />
             <span>Sistema</span>

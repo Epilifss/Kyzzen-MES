@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './Login';
 import Dashboard from './Dashboard';
-import AdmPanel from './admPanel';
+import Users from './Users';
+import Workstations from './Workstations';
 import Sidebar from './Sidebar';
 
 // Função para proteger as rotas
@@ -42,11 +43,22 @@ function App() {
         />
         
         <Route
-          path="/admin"
+          path="/users"
           element={
             <PrivateRoute>
               <MainLayout>
-                <AdmPanel />
+                <Users />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/workstations"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Workstations />
               </MainLayout>
             </PrivateRoute>
           }
