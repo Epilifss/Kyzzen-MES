@@ -97,6 +97,7 @@ function Workstations() {
                 show={showDelModal}
                 handleClose={() => setShowDelModal(false)}
                 onConfirm={handleExecuteDelete}
+                mensagem={"Ao deletar o setor, os usuários que fazem parte dele também serão deletados."}
             />
         </div>
     );

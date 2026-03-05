@@ -99,6 +99,7 @@ function Users() {
                 show={showDelModal}
                 handleClose={() => setShowDelModal(false)}
                 onConfirm={handleExecuteDelete}
+                mensagem={"Esta ação não poderá ser desfeita."}
             />
         </div>
     );

@@ -1,5 +1,5 @@
 // import { useState } from 'react';
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Modal from 'react-bootstrap/Modal';
@@ -56,10 +56,21 @@ export function ModalNewUser({ show, handleClose, refreshList }) {
         } catch (error) {
             alert('Erro ao tentar criar novo usuário: ' + error.response?.data?.detail);
         }
-
-
-
     }
+
+    const [workstationsList, setWorkstationsList] = useState([])
+
+    useEffect(() => {
+        const fetchWorkstations = async () => {
+            try {
+                const response = await api.get('/workstations/');
+                setWorkstationsList(response.data)
+            } catch (error) {
+                console.error("Erro ao buscar setores:", error);
+            }
+        };
+        fetchWorkstations();
+    }, []);
 
     return (
         <>
@@ -98,12 +109,14 @@ export function ModalNewUser({ show, handleClose, refreshList }) {
                             className="mb-3"
                         >
                             <Form.Label>Setor</Form.Label>
-                            <Form.Select value={workstation}
-                                onChange={(e) => setworkstation(e.target.value)}
-                            >
-                                <option value="0">TI</option>
-                                <option value="1">RH</option>
-                                <option value="2">Vendas</option>
+                            <Form.Select onChange={(e) => setworkstation(e.target.value)}>
+
+                                <option value="">Selecione um setor...</option>
+                                {workstationsList.map((ws) => (
+                                    <option key={ws.id} value={ws.id}>
+                                        {ws.name}
+                                    </option>
+                                ))}
                             </Form.Select>
                         </Form.Group>
                         <Form.Group
@@ -136,7 +149,7 @@ export function ModalNewUser({ show, handleClose, refreshList }) {
 export function ModalNewWorkstation({ show, handleClose, refreshList }) {
 
     const [workstationName, setWorkstationName] = useState('');
-    const [workstationHead, setWorkstationHead] = useState('0');
+    const [workstationHead, setWorkstationHead] = useState('');
 
     const cancel = async (e) => {
         if (e) e.preventDefault();
@@ -220,13 +233,13 @@ export function ModalNewWorkstation({ show, handleClose, refreshList }) {
     );
 }
 
-export function ConfirmDelItem({ show, handleClose, onConfirm }) {
+export function ConfirmDelItem({ show, handleClose, onConfirm, mensagem }) {
     return (
         <Modal show={show} onHide={handleClose}>
             <Modal.Header closeButton>
                 <Modal.Title>Tem certeza?</Modal.Title>
             </Modal.Header>
-            <Modal.Body>Essa ação não poderá ser desfeita.</Modal.Body>
+            <Modal.Body>{mensagem}</Modal.Body>
             <Modal.Footer>
                 <Button variant="secondary" onClick={handleClose}>Cancelar</Button>
                 <Button variant="danger" onClick={onConfirm}>Sim, deletar.</Button>

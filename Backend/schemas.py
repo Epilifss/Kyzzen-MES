@@ -55,6 +55,5 @@ class ProductionLogCreate(BaseModel):
 
 # Esquema para retorno de Setor
 class WorkstationCreate(BaseModel):
-    id: int
     name: str
     head: str

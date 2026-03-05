@@ -103,7 +103,7 @@ def create_workstation(workstation: schemas.WorkstationCreate, db: Session = Dep
 
 @app.delete("/workstations/{workstation_id}")
 def delete_workstation(workstation_id: int, db: Session = Depends(get_db)):
-    db_workstation = db.query(models.Workstation).filter(models.Workstationer.id == workstation_id).first()
+    db_workstation = db.query(models.Workstation).filter(models.Workstation.id == workstation_id).first()
     if not db_workstation:
         raise HTTPException(status_code=404, detail="Setor não encontrado")
     
