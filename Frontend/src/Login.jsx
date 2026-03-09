@@ -22,7 +22,8 @@ function Login() {
   };
 
   return (
-    <div className="itens_container-login">
+    <div className="login-page-wrapper">
+      <div className="itens_container-login">
       <h2>Kyzzen MES</h2>
       <form onSubmit={handleLogin}>
         <input
@@ -37,6 +38,7 @@ function Login() {
         />
         <button type="submit" style={{ width: '100%' }}>Entrar</button>
       </form>
+    </div>
     </div>
   );
 }

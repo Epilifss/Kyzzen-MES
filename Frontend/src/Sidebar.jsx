@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Settings, Wrench, ClipboardList, LogOut, ChevronRight } from 'lucide-react';
+import { Home, Users, Settings, Wrench, ClipboardList, LogOut, BookPlus } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 import './Sidebar.css';
 
@@ -23,6 +23,12 @@ const Sidebar = () => {
             <div className="menu-item active">
               <Home size={20} />
               <span>Início</span>
+            </div>
+          </NavLink>
+          <NavLink to="/orders"  className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+            <div className="menu-item">
+              <BookPlus size={20} />
+              <span>Pedidos</span>
             </div>
           </NavLink>
         </div>
@@ -49,7 +55,7 @@ const Sidebar = () => {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="menu-item logout">
+        <div className="menu-item logout" style={{ cursor: 'pointer' }}>
           <LogOut size={20} />
           <span onClick={handleLogout}>Sair</span>
         </div>

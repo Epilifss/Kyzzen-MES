@@ -61,8 +61,8 @@ function Workstations() {
                     <CiUser color="#3f4d67" /> Setores
                 </h2>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button variant='primary' onClick={() => setShowWorkstationModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', fontSize: '15px' }}> <CiCirclePlus /> Novo Setor </button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end'}}>
+                    <button variant='primary' onClick={() => setShowWorkstationModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67' , color: '#fff', fontSize: '15px' }}> <CiCirclePlus /> Novo Setor </button>
                 </div>
 
                 <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>

@@ -4,6 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './Login';
 import Dashboard from './Dashboard';
 import Users from './Users';
+import Orders from './Orders';
 import Workstations from './Workstations';
 import Sidebar from './Sidebar';
 
@@ -37,6 +38,17 @@ function App() {
             <PrivateRoute>
               <MainLayout>
                 <Dashboard />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/orders"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Orders />
               </MainLayout>
             </PrivateRoute>
           }

@@ -208,3 +208,9 @@ def get_ranking(db: Session = Depends(get_db)):
         .all()
     )
     return [{"username": r.username, "points": r.total_points} for r in ranking]
+
+# --- ROTA DE PEDIDOS ---
+
+@app.get("/orders/")
+def get_orders(db: Session = Depends(get_db)):
+    return db.query(models.Orders).all()

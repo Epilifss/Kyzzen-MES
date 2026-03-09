@@ -20,12 +20,8 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   width: 100%;
   min-height: 100vh;
-  overflow-x: hidden;
 }
 
 h1 {
@@ -89,4 +85,13 @@ button:focus-visible {
 
 .itens_container-login button {
   border-radius: 30px;
+}
+
+.login-page-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #242424; /* Ou a cor que preferir para o fundo do login */
 }

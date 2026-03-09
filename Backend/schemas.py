@@ -57,3 +57,24 @@ class ProductionLogCreate(BaseModel):
 class WorkstationCreate(BaseModel):
     name: str
     head: str
+
+class OrdersOut(BaseModel):
+    op: int
+    pedido: str
+    dt_emisssao: str
+    dt_entrega: str
+    cliente: str
+    cod_cliente: int
+    cod_tidelli: str
+    desc: str
+    linha: str
+    quant: int
+    obs: str
+    semana: str
+    tecido: int
+    aluminio: int
+    acabamento: int
+    filial: str
+
+    class Config:
+        from_attributes = True

@@ -62,7 +62,7 @@ function Users() {
                 </h2>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button variant='primary' onClick={() => setShowUserModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', fontSize: '15px' }}> <CiCirclePlus /> Novo Usuário </button>
+                    <button variant='primary' onClick={() => setShowUserModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <CiCirclePlus /> Novo Usuário </button>
                 </div>
 
                 <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
