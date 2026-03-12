@@ -17,7 +17,9 @@ const resetDatabaseConfigForm = (setFormData, initialValue = null) => {
         password: '',
         database_name: initialValue?.database_name ?? '',
         table_name: initialValue?.table_name ?? '',
+        custom_query: initialValue?.custom_query ?? '',
         has_password: initialValue?.has_password ?? false,
+        selected_fields: initialValue?.selected_fields ?? [],
     });
 };
 
@@ -274,7 +276,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
         password: '',
         database_name: '',
         table_name: '',
+        custom_query: '',
         has_password: false,
+        selected_fields: [],
     });
     const [availableFields, setAvailableFields] = useState([]);
     const [selectedFields, setSelectedFields] = useState([]);
@@ -284,8 +288,8 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
     useEffect(() => {
         if (show) {
             resetDatabaseConfigForm(setFormData, initialData);
-            setAvailableFields([]);
-            setSelectedFields([]);
+            setAvailableFields(initialData?.selected_fields ?? []);
+            setSelectedFields(initialData?.selected_fields ?? []);
             setFieldsError('');
             setIsLoadingFields(false);
         }
@@ -311,9 +315,29 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
     const previewFields = async () => {
         setFieldsError('');
 
-        if (!formData.server || !formData.username || !formData.database_name || !formData.table_name) {
-            setFieldsError('Preencha servidor, usuário, banco e tabela antes de carregar os campos.');
+        const usingCustomQuery = Boolean((formData.custom_query || '').trim());
+
+        if (!formData.server || !formData.username || !formData.database_name) {
+            setFieldsError('Preencha servidor, usuário e banco antes de carregar os campos.');
             return;
+        }
+
+        if (!usingCustomQuery && !formData.table_name) {
+            setFieldsError('Preencha a tabela ou informe uma query personalizada.');
+            return;
+        }
+
+        if (usingCustomQuery) {
+            // Strip block comments (/* ... */) and line comments (-- ...) before validating
+            const strippedQuery = formData.custom_query
+                .replace(/\/\*[\s\S]*?\*\//g, '')
+                .replace(/--[^\n]*/g, '')
+                .trim()
+                .toLowerCase();
+            if (!strippedQuery.startsWith('select') && !strippedQuery.startsWith('with')) {
+                setFieldsError('A query personalizada deve iniciar com SELECT ou WITH (CTE).');
+                return;
+            }
         }
 
         setIsLoadingFields(true);
@@ -326,13 +350,16 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
                 password: formData.password,
                 database_name: formData.database_name,
                 table_name: formData.table_name,
+                custom_query: formData.custom_query,
             };
 
             const response = await api.post('/configs/preview-fields', payload);
             const fields = response.data?.fields || [];
+            const persistedSelectedFields = formData.selected_fields || [];
+            const preservedSelectedFields = persistedSelectedFields.filter((field) => fields.includes(field));
 
             setAvailableFields(fields);
-            setSelectedFields(fields);
+            setSelectedFields(preservedSelectedFields.length > 0 ? preservedSelectedFields : fields);
         } catch (error) {
             setFieldsError(error.response?.data?.detail || 'Não foi possível recuperar os campos da tabela.');
             setAvailableFields([]);
@@ -342,9 +369,13 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
         }
     };
 
-    const handleFieldSelectionChange = (event) => {
-        const selectedValues = Array.from(event.target.selectedOptions).map((option) => option.value);
-        setSelectedFields(selectedValues);
+    const handleFieldCheckboxChange = (field) => {
+        setSelectedFields((currentFields) => {
+            if (currentFields.includes(field)) {
+                return currentFields.filter((item) => item !== field);
+            }
+            return [...currentFields, field];
+        });
     };
 
     const saveConfig = async (event) => {
@@ -357,7 +388,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
             username: formData.username,
             password: formData.password,
             database_name: formData.database_name,
-            table_name: formData.table_name,
+            table_name: formData.custom_query ? '' : formData.table_name,
+            custom_query: formData.custom_query,
+            selected_fields: selectedFields,
         };
 
         try {
@@ -444,13 +477,31 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
                             type="text"
                             value={formData.table_name}
                             onChange={handleFieldChange('table_name')}
+                            disabled={Boolean((formData.custom_query || '').trim())}
                             placeholder={formData.db_type === 'sqlserver' ? 'Ex.: dbo.PEDIDOS' : 'Ex.: public.orders'}
                         />
+                        <Form.Text>
+                            Se você preencher a query personalizada abaixo, o campo tabela deixa de ser obrigatório.
+                        </Form.Text>
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                        <Form.Label>Query personalizada (opcional)</Form.Label>
+                        <Form.Control
+                            as="textarea"
+                            rows={4}
+                            value={formData.custom_query}
+                            onChange={handleFieldChange('custom_query')}
+                            placeholder="Ex.: SELECT pedido, cliente, filial FROM dbo.PEDIDOS WHERE status = 'aberto'"
+                        />
+                        <Form.Text>
+                            Use apenas SELECT. Quando informada, essa query será usada no lugar da tabela para carregar campos e pedidos.
+                        </Form.Text>
                     </Form.Group>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
                         <Button variant="outline-primary" onClick={previewFields} disabled={isLoadingFields}>
-                            {isLoadingFields ? 'Carregando campos...' : 'Carregar campos da tabela'}
+                            {isLoadingFields ? 'Carregando campos...' : 'Carregar campos da fonte'}
                         </Button>
                     </div>
 
@@ -462,16 +513,22 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
 
                     {availableFields.length > 0 && (
                         <Form.Group className="mb-3">
-                            <Form.Label>Campos recuperados da conexão (seleção múltipla)</Form.Label>
-                            <Form.Select multiple value={selectedFields} onChange={handleFieldSelectionChange} style={{ minHeight: '130px' }}>
+                            <Form.Label>Campos recuperados da conexão</Form.Label>
+                            <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '220px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
                                 {availableFields.map((field) => (
-                                    <option key={field} value={field}>
-                                        {field}
-                                    </option>
+                                    <Form.Check
+                                        key={field}
+                                        type="checkbox"
+                                        id={`field-${field}`}
+                                        label={field}
+                                        checked={selectedFields.includes(field)}
+                                        onChange={() => handleFieldCheckboxChange(field)}
+                                        style={{ marginBottom: '8px' }}
+                                    />
                                 ))}
-                            </Form.Select>
+                            </div>
                             <Form.Text>
-                                Esses campos são recuperados da tabela externa para uso no fluxo de pedidos, sem gravar os pedidos no banco local nesta etapa.
+                                Marque os campos que devem entrar na query da tela de pedidos. Somente os campos selecionados serão consultados na base externa.
                             </Form.Text>
                         </Form.Group>
                     )}

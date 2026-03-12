@@ -1,55 +1,36 @@
 import React, { useEffect, useState } from "react";
 import api from './api';
-import { CiCirclePlus, CiBoxList, CiTrash } from "react-icons/ci";
-import { LuBookPlus } from "react-icons/lu";
-import { ModalNewUser, ConfirmDelItem } from "./modais";
+import { LuBookPlus, LuRefreshCw } from "react-icons/lu";
 
 function Orders() {
     const [orders, setOrders] = useState([]);
-    const [ShowOrderModal, setShowOrderModal] = useState(false);
-    const [showDelModal, setshowDelModal] = useState(false);
-    const [orderIdSelected, setorderIdSelected] = useState(null);
+    const [orderFields, setOrderFields] = useState([]);
+    const [configName, setConfigName] = useState('');
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [ordersError, setOrdersError] = useState('');
 
     useEffect(() => {
         fetchOrders();
     }, []);
 
     const fetchOrders = async () => {
+        setLoadingOrders(true);
+        setOrdersError('');
         try {
-            const response = await api.get('./orders/');
-            setOrders(response.data);
+            const response = await api.get('./orders/external/');
+            setOrders(response.data.rows || []);
+            setOrderFields(response.data.fields || []);
+            setConfigName(response.data.config_name || '');
         } catch (error) {
+            setOrders([]);
+            setOrderFields([]);
+            setConfigName('');
+            setOrdersError(error.response?.data?.detail || 'Erro ao buscar pedidos externos');
             console.error("Erro ao buscar pedidos", error)
+        } finally {
+            setLoadingOrders(false);
         }
-    }
-
-    // const confirmDelete = (id) => {
-    //     setorderIdSelected(id);
-    //     setshowDelModal(true);
-    // };
-
-    // const handleExecuteDelete = async () => {
-    //     if (orderIdSelected) {
-    //         await DeleteUser(orderIdSelected);
-    //         setshowDelModal(false);
-    //         setorderIdSelected(null);
-    //     }
-    // };
-
-    // const DeleteUser = async (user_id) => {
-
-    //     try {
-    //         console.log(user_id);
-    //         const response = await api.delete('/users/' + user_id);
-
-    //         if (response.status === 201 || response.status === 200) {
-    //             fetchUsers();
-    //         }
-    //     } catch (error) {
-    //         alert('Erro ao obter o id: ' + error.response?.data?.detail);
-    //     }
-
-    // };
+    };
 
     return (
         <div style={{ width: '100%', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -62,47 +43,51 @@ function Orders() {
                     <LuBookPlus color="#3f4d67" /> Pedidos
                 </h2>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button variant='primary' onClick={() => setShowOrderModal(true)} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <CiCirclePlus size={20} /> Novo Pedido </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ color: '#5f6c81' }}>
+                        {configName ? `Exibindo dados externos da configuração ${configName}.` : 'Configure e selecione campos na aba de configurações para carregar os pedidos externos.'}
+                    </div>
+                    <button onClick={fetchOrders} disabled={loadingOrders} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff', fontSize: '15px' }}>
+                        <LuRefreshCw size={20} /> {loadingOrders ? 'Atualizando...' : 'Atualizar pedidos'}
+                    </button>
                 </div>
+
+                {ordersError && (
+                    <div style={{ padding: '12px', backgroundColor: '#fef3f2', color: '#b42318', borderRadius: '8px', marginBottom: '12px' }}>
+                        {ordersError}
+                    </div>
+                )}
 
                 <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                     <thead>
                         <tr style={{ borderBottom: '2px solid #3f4d67', textAlign: 'left', color: '#3f4d67' }}>
-                            <th style={{ padding: '10px' }}>Pedido</th>
-                            <th style={{ padding: '10px' }}>Emissão</th>
-                            <th style={{ padding: '10px' }}>Entrega</th>
-                            <th style={{ padding: '10px' }}>Cliente</th>
-                            <th style={{ padding: '10px' }}>Filial</th>
+                            {orderFields.map((field) => (
+                                <th key={field} style={{ padding: '10px' }}>{field}</th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {orders.map((op, index) => (
+                        {orders.length === 0 && (
+                            <tr>
+                                <td colSpan={Math.max(orderFields.length, 1)} style={{ padding: '20px', color: '#5f6c81', textAlign: 'center' }}>
+                                    {loadingOrders ? 'Carregando pedidos...' : 'Nenhum pedido encontrado para os campos selecionados.'}
+                                </td>
+                            </tr>
+                        )}
+
+                        {orders.map((order, index) => (
                             <tr key={index} style={{ borderBottom: '1px solid #3f4d67', color: '#3f4d67' }}>
-                                <td style={{ padding: '10px', fontWeight: 'bold' }}>{op.pedido}</td>
-                                <td style={{ padding: '10px' }}>{op.dt_emissao}</td>
-                                <td style={{ padding: '10px' }}>{op.dt_entrega}</td>
-                                <td style={{ padding: '10px' }}>{op.cliente}</td>
-                                <td style={{ padding: '10px' }}>{op.filial}</td>
+                                {orderFields.map((field) => (
+                                    <td key={`${index}-${field}`} style={{ padding: '10px', fontWeight: field === 'pedido' ? 'bold' : 'normal' }}>
+                                        {order[field] === null || order[field] === undefined ? '' : String(order[field])}
+                                    </td>
+                                ))}
                             </tr>
                         ))}
                     </tbody>
                 </table>
 
             </div>
-
-            <ModalNewUser
-                show={ShowOrderModal}
-                handleClose={() => setShowOrderModal(false)}
-                refreshList={fetchOrders}
-            />
-
-            <ConfirmDelItem
-                show={showDelModal}
-                handleClose={() => setshowDelModal(false)}
-                // onConfirm={handleExecuteDelete}
-                mensagem={"Esta ação não poderá ser desfeita."}
-            />
         </div>
     );
 }

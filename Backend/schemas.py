@@ -8,23 +8,27 @@ class DatabaseConfigPayloadBase(BaseModel):
     server: str
     username: str
     database_name: str
-    table_name: str
+    table_name: Optional[str] = None
+    custom_query: Optional[str] = None
 
 
 class DatabaseConfigCreate(DatabaseConfigPayloadBase):
     name: str
     password: str
+    selected_fields: List[str] = []
 
 
 class DatabaseConfigUpdate(DatabaseConfigPayloadBase):
     name: str
     password: Optional[str] = None
+    selected_fields: List[str] = []
 
 
 class DatabaseConfigOut(DatabaseConfigPayloadBase):
     id: int
     name: str
     has_password: bool
+    selected_fields: List[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -39,6 +43,13 @@ class DatabaseConfigFieldsPreviewRequest(DatabaseConfigPayloadBase):
 
 class DatabaseConfigFieldsPreviewResponse(BaseModel):
     fields: List[str]
+
+
+class ExternalOrdersResponse(BaseModel):
+    config_id: int
+    config_name: str
+    fields: List[str]
+    rows: List[dict]
 
 # Esquema para criar um Usuário
 class UserCreate(BaseModel):

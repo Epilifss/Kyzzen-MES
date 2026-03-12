@@ -1,11 +1,12 @@
 import models, schemas
 from database import engine, get_db
 from sqlalchemy.orm import Session
-from sqlalchemy import func, create_engine, inspect
+from sqlalchemy import MetaData, Table, func, create_engine, inspect, select, text
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
 import auth
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote_plus
 
 # models.Base.metadata.drop_all(bind=engine) 
@@ -30,7 +31,10 @@ def parse_server_host_port(server: str):
     return server, 5432
 
 
-def split_schema_and_table(table_name: str, db_type: str):
+def split_schema_and_table(table_name: Optional[str], db_type: str):
+    if not table_name:
+        raise HTTPException(status_code=400, detail="Tabela é obrigatória quando não há query personalizada")
+
     if "." in table_name:
         schema_name, raw_table_name = table_name.split(".", 1)
         return schema_name, raw_table_name
@@ -80,10 +84,96 @@ def serialize_database_config(config: models.DatabaseConfig):
         "username": connection_data.get("username", ""),
         "database_name": connection_data.get("database_name", ""),
         "table_name": connection_data.get("table_name", ""),
+        "custom_query": connection_data.get("custom_query", ""),
         "has_password": bool(connection_data.get("password")),
+        "selected_fields": connection_data.get("selected_fields", []),
         "created_at": config.created_at,
         "updated_at": config.updated_at,
     }
+
+
+def get_config_password(config_payload, db: Session):
+    password = config_payload.password or ""
+    if not password and getattr(config_payload, "config_id", None):
+        existing_config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == config_payload.config_id).first()
+        if not existing_config:
+            raise HTTPException(status_code=404, detail="Configuração não encontrada")
+        password = (existing_config.connection_data or {}).get("password", "")
+
+    if not password:
+        raise HTTPException(status_code=400, detail="Senha é obrigatória para testar conexão")
+
+    return password
+
+
+def _is_cte_query(query: str) -> bool:
+    """Returns True if the query (after stripping comments) starts with WITH (CTE)."""
+    import re
+    stripped = re.sub(r"/\*.*?\*/", "", query, flags=re.DOTALL)
+    stripped = re.sub(r"--[^\n]*", "", stripped).strip().lower()
+    return stripped.startswith("with")
+
+
+def _build_zero_row_preview(query: str, db_type: str) -> str:
+    """Build a query that returns 0 rows but exposes all columns for schema inspection."""
+    if _is_cte_query(query):
+        # CTEs cannot be wrapped in a subquery.
+        # For SQL Server: wrap with TOP 0 applied to the outer CTE reference.
+        # Strategy: SELECT TOP 0 * FROM (<CTE query>) AS _p does NOT work in T-SQL.
+        # Safest cross-dialect approach: return the query untouched and let the caller
+        # fetch with fetchmany(0) / just read keys – but SQLAlchemy still needs execution.
+        # For PostgreSQL, append LIMIT 0. For SQL Server, use SET ROWCOUNT 0 trick:
+        # Actually the simplest cross-version way for SQL Server is to add WHERE 1=0
+        # to the final query block. We detect whether there's already a WHERE clause
+        # in the final SELECT and append AND 1=0 or WHERE 1=0 accordingly.
+        if db_type == "sqlserver":
+            import re
+            # Add a wrapping SELECT TOP 0 by converting the CTE into a named outer query
+            # T-SQL allows: WITH ... SELECT ... is a complete statement; not nestable.
+            # Most reliable: just run with fetchmany(0) after connect – handled in caller.
+            return query  # caller will use fetchmany(0)
+        else:
+            return f"{query} LIMIT 0"
+    return f"SELECT * FROM ({query}) AS _preview WHERE 1 = 0"
+
+
+def _strip_sql_comments(query: str) -> str:
+    """Remove block comments (/* ... */) and line comments (-- ...) from SQL."""
+    import re
+    # Remove block comments
+    query = re.sub(r"/\*.*?\*/", "", query, flags=re.DOTALL)
+    # Remove line comments
+    query = re.sub(r"--[^\n]*", "", query)
+    return query.strip()
+
+
+def normalize_custom_query(custom_query: Optional[str]):
+    query = (custom_query or "").strip()
+    if not query:
+        return ""
+
+    stripped = _strip_sql_comments(query).lower()
+    if not (stripped.startswith("select") or stripped.startswith("with")):
+        raise HTTPException(
+            status_code=400,
+            detail="A query personalizada deve iniciar com SELECT ou WITH (CTE)"
+        )
+
+    if ";" in query[:-1]:
+        raise HTTPException(status_code=400, detail="A query personalizada deve conter apenas um comando")
+
+    return query.rstrip(";")
+
+
+def validate_source_input(table_name: Optional[str], custom_query: Optional[str]):
+    has_table = bool((table_name or "").strip())
+    has_custom_query = bool((custom_query or "").strip())
+
+    if has_table and has_custom_query:
+        raise HTTPException(status_code=400, detail="Informe apenas tabela ou query personalizada, não ambos")
+
+    if not has_table and not has_custom_query:
+        raise HTTPException(status_code=400, detail="Informe uma tabela ou uma query personalizada")
 
 
 @app.get("/configs/", response_model=list[schemas.DatabaseConfigOut])
@@ -107,6 +197,9 @@ def create_config(config: schemas.DatabaseConfigCreate, db: Session = Depends(ge
     if existing_config:
         raise HTTPException(status_code=400, detail="Já existe uma configuração com esse nome")
 
+    normalized_query = normalize_custom_query(config.custom_query)
+    validate_source_input(config.table_name, normalized_query)
+
     new_config = models.DatabaseConfig(
         name=config.name,
         connection_data={
@@ -115,7 +208,9 @@ def create_config(config: schemas.DatabaseConfigCreate, db: Session = Depends(ge
             "username": config.username,
             "password": config.password,
             "database_name": config.database_name,
-            "table_name": config.table_name,
+            "table_name": (config.table_name or "").strip(),
+            "custom_query": normalized_query,
+            "selected_fields": getattr(config, "selected_fields", []),
         },
     )
 
@@ -139,6 +234,9 @@ def update_config(config_id: int, config: schemas.DatabaseConfigUpdate, db: Sess
     if existing_config:
         raise HTTPException(status_code=400, detail="Já existe uma configuração com esse nome")
 
+    normalized_query = normalize_custom_query(config.custom_query)
+    validate_source_input(config.table_name, normalized_query)
+
     current_connection_data = db_config.connection_data or {}
     password = config.password if config.password else current_connection_data.get("password", "")
 
@@ -149,7 +247,9 @@ def update_config(config_id: int, config: schemas.DatabaseConfigUpdate, db: Sess
         "username": config.username,
         "password": password,
         "database_name": config.database_name,
-        "table_name": config.table_name,
+        "table_name": (config.table_name or "").strip(),
+        "custom_query": normalized_query,
+        "selected_fields": getattr(config, "selected_fields", []),
     }
 
     db.commit()
@@ -159,21 +259,12 @@ def update_config(config_id: int, config: schemas.DatabaseConfigUpdate, db: Sess
 
 @app.post("/configs/preview-fields", response_model=schemas.DatabaseConfigFieldsPreviewResponse)
 def preview_config_fields(payload: schemas.DatabaseConfigFieldsPreviewRequest, db: Session = Depends(get_db)):
-    if not payload.table_name:
-        raise HTTPException(status_code=400, detail="Tabela é obrigatória")
+    normalized_query = normalize_custom_query(payload.custom_query)
+    validate_source_input(payload.table_name, normalized_query)
 
-    password = payload.password or ""
-    if not password and payload.config_id:
-        existing_config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == payload.config_id).first()
-        if not existing_config:
-            raise HTTPException(status_code=404, detail="Configuração não encontrada")
-        password = (existing_config.connection_data or {}).get("password", "")
-
-    if not password:
-        raise HTTPException(status_code=400, detail="Senha é obrigatória para testar conexão")
+    password = get_config_password(payload, db)
 
     normalized_type = normalize_db_type(payload.db_type)
-    schema_name, table_name = split_schema_and_table(payload.table_name, normalized_type)
     database_url = build_external_db_url(
         normalized_type,
         payload.server,
@@ -185,9 +276,19 @@ def preview_config_fields(payload: schemas.DatabaseConfigFieldsPreviewRequest, d
     external_engine = None
     try:
         external_engine = create_engine(database_url, pool_pre_ping=True)
-        inspector = inspect(external_engine)
-        columns = inspector.get_columns(table_name, schema=schema_name)
-        field_names = [column.get("name") for column in columns if column.get("name")]
+        if normalized_query:
+            preview_sql = _build_zero_row_preview(normalized_query, normalized_type)
+            with external_engine.connect() as connection:
+                result = connection.execute(text(preview_sql))
+                # For SQL Server CTEs the query is run as-is; fetch at most 1 row
+                # just to get the column metadata, then discard the rows.
+                result.fetchmany(1)
+                field_names = list(result.keys())
+        else:
+            schema_name, table_name = split_schema_and_table(payload.table_name, normalized_type)
+            inspector = inspect(external_engine)
+            columns = inspector.get_columns(table_name, schema=schema_name)
+            field_names = [column.get("name") for column in columns if column.get("name")]
 
         if not field_names:
             raise HTTPException(status_code=404, detail="Nenhum campo encontrado para a tabela informada")
@@ -197,6 +298,80 @@ def preview_config_fields(payload: schemas.DatabaseConfigFieldsPreviewRequest, d
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha ao conectar/tabela inválida: {str(exc)}") from exc
+    finally:
+        if external_engine is not None:
+            external_engine.dispose()
+
+
+@app.get("/orders/external/", response_model=schemas.ExternalOrdersResponse)
+def get_external_orders(db: Session = Depends(get_db)):
+    active_config = db.query(models.DatabaseConfig).order_by(models.DatabaseConfig.updated_at.desc()).first()
+    if not active_config:
+        raise HTTPException(status_code=404, detail="Nenhuma configuração de banco cadastrada")
+
+    connection_data = active_config.connection_data or {}
+    custom_query = normalize_custom_query(connection_data.get("custom_query", ""))
+    table_name_value = connection_data.get("table_name", "")
+    validate_source_input(table_name_value, custom_query)
+
+    selected_fields = connection_data.get("selected_fields", [])
+    if not selected_fields:
+        raise HTTPException(status_code=400, detail="Selecione ao menos um campo na configuração antes de carregar os pedidos")
+
+    normalized_type = normalize_db_type(connection_data.get("db_type", "postgresql"))
+    password = connection_data.get("password", "")
+    if not password:
+        raise HTTPException(status_code=400, detail="A configuração selecionada não possui senha salva")
+
+    database_url = build_external_db_url(
+        normalized_type,
+        connection_data.get("server", ""),
+        connection_data.get("username", ""),
+        password,
+        connection_data.get("database_name", ""),
+    )
+
+    external_engine = None
+    try:
+        external_engine = create_engine(database_url, pool_pre_ping=True)
+        if custom_query:
+            with external_engine.connect() as connection:
+                result = connection.execute(text(custom_query))
+                all_rows = [dict(row._mapping) for row in result]
+                available_fields = list(result.keys())
+
+            query_fields = [field for field in selected_fields if field in available_fields]
+            if not query_fields:
+                raise HTTPException(status_code=404, detail="Os campos selecionados não existem no resultado da query personalizada")
+
+            rows = [{field: row.get(field) for field in query_fields} for row in all_rows]
+        else:
+            schema_name, table_name = split_schema_and_table(table_name_value, normalized_type)
+            metadata = MetaData()
+            external_table = Table(table_name, metadata, autoload_with=external_engine, schema=schema_name)
+
+            available_columns = {column.name: column for column in external_table.columns}
+            query_columns = [available_columns[field] for field in selected_fields if field in available_columns]
+            if not query_columns:
+                raise HTTPException(status_code=404, detail="Os campos selecionados não existem mais na tabela configurada")
+
+            query = select(*query_columns)
+            with external_engine.connect() as connection:
+                result = connection.execute(query)
+                rows = [dict(row._mapping) for row in result]
+
+            query_fields = [column.name for column in query_columns]
+
+        return jsonable_encoder({
+            "config_id": active_config.id,
+            "config_name": active_config.name,
+            "fields": query_fields,
+            "rows": rows,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Falha ao consultar pedidos externos: {str(exc)}") from exc
     finally:
         if external_engine is not None:
             external_engine.dispose()

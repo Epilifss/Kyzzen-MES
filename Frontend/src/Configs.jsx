@@ -84,7 +84,7 @@ function Configs() {
                                 <td style={{ padding: '10px' }}>{config.server}</td>
                                 <td style={{ padding: '10px' }}>{config.username}</td>
                                 <td style={{ padding: '10px' }}>{config.database_name}</td>
-                                <td style={{ padding: '10px' }}>{config.table_name}</td>
+                                <td style={{ padding: '10px' }}>{config.custom_query ? 'Query personalizada' : config.table_name}</td>
                                 <td style={{ padding: '10px' }}>{config.has_password ? 'Configurada' : 'Não informada'}</td>
                                 <td style={{ padding: '10px' }}>
                                     <button
