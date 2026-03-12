@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from './api';
 import { CiCirclePlus, CiUser, CiTrash } from "react-icons/ci";
+import { LuUserRoundPlus, LuUsers } from "react-icons/lu";
 import { ModalNewUser, ConfirmDelItem } from "./modais";
 
 function Users() {
@@ -58,11 +59,11 @@ function Users() {
 
 
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#3f4d67' }}>
-                    <CiUser color="#3f4d67" /> Usuários
+                    <LuUsers color="#3f4d67" /> Usuários
                 </h2>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button variant='primary' onClick={() => setShowUserModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <CiCirclePlus /> Novo Usuário </button>
+                    <button variant='primary' onClick={() => setShowUserModal(true)} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <LuUserRoundPlus size={20} /> Novo Usuário </button>
                 </div>
 
                 <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>

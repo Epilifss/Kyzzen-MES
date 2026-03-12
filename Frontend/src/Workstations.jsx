@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from './api';
 import { CiCirclePlus, CiUser, CiTrash } from "react-icons/ci";
+import { LuGroup } from "react-icons/lu";
 import { ModalNewWorkstation, ConfirmDelItem } from "./modais";
 
 function Workstations() {
@@ -58,11 +59,11 @@ function Workstations() {
 
 
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#3f4d67' }}>
-                    <CiUser color="#3f4d67" /> Setores
+                    <LuGroup color="#3f4d67" /> Setores
                 </h2>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end'}}>
-                    <button variant='primary' onClick={() => setShowWorkstationModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67' , color: '#fff', fontSize: '15px' }}> <CiCirclePlus /> Novo Setor </button>
+                    <button variant='primary' onClick={() => setShowWorkstationModal(true)} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67' , color: '#fff', fontSize: '15px' }}> <CiCirclePlus size={20} /> Novo Setor </button>
                 </div>
 
                 <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>

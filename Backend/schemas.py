@@ -2,6 +2,44 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+
+class DatabaseConfigPayloadBase(BaseModel):
+    db_type: str = "postgresql"
+    server: str
+    username: str
+    database_name: str
+    table_name: str
+
+
+class DatabaseConfigCreate(DatabaseConfigPayloadBase):
+    name: str
+    password: str
+
+
+class DatabaseConfigUpdate(DatabaseConfigPayloadBase):
+    name: str
+    password: Optional[str] = None
+
+
+class DatabaseConfigOut(DatabaseConfigPayloadBase):
+    id: int
+    name: str
+    has_password: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DatabaseConfigFieldsPreviewRequest(DatabaseConfigPayloadBase):
+    config_id: Optional[int] = None
+    password: Optional[str] = None
+
+
+class DatabaseConfigFieldsPreviewResponse(BaseModel):
+    fields: List[str]
+
 # Esquema para criar um Usuário
 class UserCreate(BaseModel):
     username: str

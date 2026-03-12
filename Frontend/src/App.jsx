@@ -7,6 +7,7 @@ import Users from './Users';
 import Orders from './Orders';
 import Workstations from './Workstations';
 import Sidebar from './Sidebar';
+import Configs from './Configs';
 
 // Função para proteger as rotas
 const PrivateRoute = ({ children }) => {
@@ -71,6 +72,17 @@ function App() {
             <PrivateRoute>
               <MainLayout>
                 <Workstations />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/configs"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Configs />
               </MainLayout>
             </PrivateRoute>
           }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from './api';
 import { CiCirclePlus, CiBoxList, CiTrash } from "react-icons/ci";
+import { LuBookPlus } from "react-icons/lu";
 import { ModalNewUser, ConfirmDelItem } from "./modais";
 
 function Orders() {
@@ -58,14 +59,14 @@ function Orders() {
 
 
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#3f4d67' }}>
-                    <CiBoxList color="#3f4d67" /> Pedidos
+                    <LuBookPlus color="#3f4d67" /> Pedidos
                 </h2>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button variant='primary' onClick={() => setShowOrderModal(true)} style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <CiCirclePlus /> Novo Usuário </button>
+                    <button variant='primary' onClick={() => setShowOrderModal(true)} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <CiCirclePlus size={20} /> Novo Pedido </button>
                 </div>
 
-                <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                     <thead>
                         <tr style={{ borderBottom: '2px solid #3f4d67', textAlign: 'left', color: '#3f4d67' }}>
                             <th style={{ padding: '10px' }}>Pedido</th>
@@ -78,10 +79,11 @@ function Orders() {
                     <tbody>
                         {orders.map((op, index) => (
                             <tr key={index} style={{ borderBottom: '1px solid #3f4d67', color: '#3f4d67' }}>
-                                <td style={{ padding: '10px', fontWeight: 'bold' }}>{op.op}</td>
                                 <td style={{ padding: '10px', fontWeight: 'bold' }}>{op.pedido}</td>
                                 <td style={{ padding: '10px' }}>{op.dt_emissao}</td>
-                                <td style={{ padding: '10px' }}>{op.role}</td>
+                                <td style={{ padding: '10px' }}>{op.dt_entrega}</td>
+                                <td style={{ padding: '10px' }}>{op.cliente}</td>
+                                <td style={{ padding: '10px' }}>{op.filial}</td>
                             </tr>
                         ))}
                     </tbody>

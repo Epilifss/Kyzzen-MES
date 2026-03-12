@@ -4,6 +4,20 @@ from sqlalchemy.dialects.postgresql import JSONB
 from database import Base
 import datetime
 
+
+class DatabaseConfig(Base):
+    __tablename__ = "database_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    connection_data = Column(JSONB, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Settings, Wrench, ClipboardList, LogOut, BookPlus } from 'lucide-react';
+import { Home, Users, Settings, Group, LogOut, BookPlus } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 import './Sidebar.css';
 
@@ -25,7 +25,7 @@ const Sidebar = () => {
               <span>Início</span>
             </div>
           </NavLink>
-          <NavLink to="/orders"  className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+          <NavLink to="/orders" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
             <div className="menu-item">
               <BookPlus size={20} />
               <span>Pedidos</span>
@@ -41,16 +41,18 @@ const Sidebar = () => {
               <span>Usuários</span>
             </div>
           </NavLink>
-            <NavLink to="/workstations" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+          <NavLink to="/workstations" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
             <div className="menu-item">
-              <Users size={20} />
+              <Group size={20} />
               <span>Setores</span>
             </div>
           </NavLink>
-          <div className="menu-item">
-            <Settings size={20} />
-            <span>Sistema</span>
-          </div>
+          <NavLink to="/configs" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+            <div className="menu-item">
+              <Settings size={20} />
+              <span>Configurações</span>
+            </div>
+          </NavLink>
         </div>
       </nav>
 

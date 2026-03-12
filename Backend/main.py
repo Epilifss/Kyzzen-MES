@@ -1,16 +1,205 @@
 import models, schemas
 from database import engine, get_db
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, create_engine, inspect
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 import auth
 from typing import List
+from urllib.parse import quote_plus
 
 # models.Base.metadata.drop_all(bind=engine) 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+
+def parse_server_host_port(server: str):
+    server = (server or "").strip()
+    if not server:
+        raise HTTPException(status_code=400, detail="Servidor é obrigatório")
+
+    if ":" in server:
+        host, port_str = server.rsplit(":", 1)
+        try:
+            port = int(port_str)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Porta inválida no servidor") from exc
+        return host, port
+
+    return server, 5432
+
+
+def split_schema_and_table(table_name: str, db_type: str):
+    if "." in table_name:
+        schema_name, raw_table_name = table_name.split(".", 1)
+        return schema_name, raw_table_name
+    default_schema = "dbo" if db_type == "sqlserver" else "public"
+    return default_schema, table_name
+
+
+def normalize_db_type(db_type: str):
+    normalized = (db_type or "postgresql").strip().lower()
+    if normalized in ["postgres", "postgresql", "pgsql"]:
+        return "postgresql"
+    if normalized in ["sqlserver", "mssql", "sql_server"]:
+        return "sqlserver"
+    raise HTTPException(status_code=400, detail="Tipo de banco não suportado. Use postgresql ou sqlserver")
+
+
+def build_external_db_url(db_type: str, server: str, username: str, password: str, database_name: str):
+    normalized_type = normalize_db_type(db_type)
+    server = (server or "").strip()
+
+    if normalized_type == "sqlserver":
+        driver = "ODBC Driver 17 for SQL Server"
+        odbc_connect = (
+            f"DRIVER={{{driver}}};"
+            f"SERVER={server};"
+            f"DATABASE={database_name};"
+            f"UID={username};"
+            f"PWD={password};"
+            "TrustServerCertificate=yes;"
+        )
+        return f"mssql+pyodbc:///?odbc_connect={quote_plus(odbc_connect)}"
+
+    if server.startswith("postgresql://"):
+        return server
+
+    host, port = parse_server_host_port(server)
+    return f"postgresql+psycopg2://{username}:{password}@{host}:{port}/{database_name}"
+
+
+def serialize_database_config(config: models.DatabaseConfig):
+    connection_data = config.connection_data or {}
+    return {
+        "id": config.id,
+        "name": config.name,
+        "db_type": connection_data.get("db_type", "postgresql"),
+        "server": connection_data.get("server", ""),
+        "username": connection_data.get("username", ""),
+        "database_name": connection_data.get("database_name", ""),
+        "table_name": connection_data.get("table_name", ""),
+        "has_password": bool(connection_data.get("password")),
+        "created_at": config.created_at,
+        "updated_at": config.updated_at,
+    }
+
+
+@app.get("/configs/", response_model=list[schemas.DatabaseConfigOut])
+def get_configs(db: Session = Depends(get_db)):
+    configs = db.query(models.DatabaseConfig).order_by(models.DatabaseConfig.name.asc()).all()
+    return [serialize_database_config(config) for config in configs]
+
+
+@app.get("/configs/{config_id}", response_model=schemas.DatabaseConfigOut)
+def get_config(config_id: int, db: Session = Depends(get_db)):
+    config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == config_id).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+
+    return serialize_database_config(config)
+
+
+@app.post("/configs/", response_model=schemas.DatabaseConfigOut)
+def create_config(config: schemas.DatabaseConfigCreate, db: Session = Depends(get_db)):
+    existing_config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.name == config.name).first()
+    if existing_config:
+        raise HTTPException(status_code=400, detail="Já existe uma configuração com esse nome")
+
+    new_config = models.DatabaseConfig(
+        name=config.name,
+        connection_data={
+            "db_type": normalize_db_type(config.db_type),
+            "server": config.server,
+            "username": config.username,
+            "password": config.password,
+            "database_name": config.database_name,
+            "table_name": config.table_name,
+        },
+    )
+
+    db.add(new_config)
+    db.commit()
+    db.refresh(new_config)
+    return serialize_database_config(new_config)
+
+
+@app.put("/configs/{config_id}", response_model=schemas.DatabaseConfigOut)
+def update_config(config_id: int, config: schemas.DatabaseConfigUpdate, db: Session = Depends(get_db)):
+    db_config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == config_id).first()
+    if not db_config:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+
+    existing_config = (
+        db.query(models.DatabaseConfig)
+        .filter(models.DatabaseConfig.name == config.name, models.DatabaseConfig.id != config_id)
+        .first()
+    )
+    if existing_config:
+        raise HTTPException(status_code=400, detail="Já existe uma configuração com esse nome")
+
+    current_connection_data = db_config.connection_data or {}
+    password = config.password if config.password else current_connection_data.get("password", "")
+
+    db_config.name = config.name
+    db_config.connection_data = {
+        "db_type": normalize_db_type(config.db_type),
+        "server": config.server,
+        "username": config.username,
+        "password": password,
+        "database_name": config.database_name,
+        "table_name": config.table_name,
+    }
+
+    db.commit()
+    db.refresh(db_config)
+    return serialize_database_config(db_config)
+
+
+@app.post("/configs/preview-fields", response_model=schemas.DatabaseConfigFieldsPreviewResponse)
+def preview_config_fields(payload: schemas.DatabaseConfigFieldsPreviewRequest, db: Session = Depends(get_db)):
+    if not payload.table_name:
+        raise HTTPException(status_code=400, detail="Tabela é obrigatória")
+
+    password = payload.password or ""
+    if not password and payload.config_id:
+        existing_config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == payload.config_id).first()
+        if not existing_config:
+            raise HTTPException(status_code=404, detail="Configuração não encontrada")
+        password = (existing_config.connection_data or {}).get("password", "")
+
+    if not password:
+        raise HTTPException(status_code=400, detail="Senha é obrigatória para testar conexão")
+
+    normalized_type = normalize_db_type(payload.db_type)
+    schema_name, table_name = split_schema_and_table(payload.table_name, normalized_type)
+    database_url = build_external_db_url(
+        normalized_type,
+        payload.server,
+        payload.username,
+        password,
+        payload.database_name,
+    )
+
+    external_engine = None
+    try:
+        external_engine = create_engine(database_url, pool_pre_ping=True)
+        inspector = inspect(external_engine)
+        columns = inspector.get_columns(table_name, schema=schema_name)
+        field_names = [column.get("name") for column in columns if column.get("name")]
+
+        if not field_names:
+            raise HTTPException(status_code=404, detail="Nenhum campo encontrado para a tabela informada")
+
+        return {"fields": field_names}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Falha ao conectar/tabela inválida: {str(exc)}") from exc
+    finally:
+        if external_engine is not None:
+            external_engine.dispose()
 
 # --- ROTAS DE USUÁRIOS ---
 
