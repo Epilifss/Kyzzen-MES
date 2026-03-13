@@ -52,39 +52,38 @@ function Workstations() {
     };
 
     return (
-        <div style={{ width: '100%', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
-
-
+        <div className="com-sidebar page-shell">
             <div>
-
-
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#3f4d67' }}>
+                <h2 className="page-title">
                     <LuGroup color="#3f4d67" /> Setores
                 </h2>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end'}}>
-                    <button variant='primary' onClick={() => setShowWorkstationModal(true)} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67' , color: '#fff', fontSize: '15px' }}> <CiCirclePlus size={20} /> Novo Setor </button>
+                <div className="actions-right">
+                    <button variant='primary' onClick={() => setShowWorkstationModal(true)} className="primary-btn"> <CiCirclePlus size={20} /> Novo Setor </button>
                 </div>
 
-                <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
+                <div className="table-wrapper">
+                    <table className="data-table">
                     <thead>
-                        <tr style={{ borderBottom: '2px solid #3f4d67', textAlign: 'left', color: '#3f4d67' }}>
-                            <th style={{ padding: '10px' }}>ID</th>
-                            <th style={{ padding: '10px' }}>Setor</th>
-                            <th style={{ padding: '10px' }}>Encarregado</th>
+                        <tr>
+                            <th>ID</th>
+                            <th>Setor</th>
+                            <th>Encarregado</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {workstations.map((op, index) => (
-                            <tr key={index} style={{ borderBottom: '1px solid #3f4d67', color: '#3f4d67' }}>
-                                <td style={{ padding: '10px' }}>{op.id}</td>
-                                <td style={{ padding: '10px' }}>{op.name}</td>
-                                <td style={{ padding: '10px' }}>{op.head}</td>
-                                <td onClick={() => confirmDelete(op.id)} style={{ color: 'red', cursor: 'pointer' }}><CiTrash /></td>
+                            <tr key={index}>
+                                <td>{op.id}</td>
+                                <td>{op.name}</td>
+                                <td>{op.head}</td>
+                                <td className="cell-actions" onClick={() => confirmDelete(op.id)} style={{ color: 'red', cursor: 'pointer' }}><CiTrash /></td>
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                    </table>
+                </div>
 
             </div>
 

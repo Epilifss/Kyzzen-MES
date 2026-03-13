@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from './api';
-import { CiCirclePlus, CiUser, CiTrash } from "react-icons/ci";
-import { LuUserRoundPlus, LuUsers } from "react-icons/lu";
+import { CiTrash } from "react-icons/ci";
+import { LuUserRoundPlus, LuUsers, LuPencil } from "react-icons/lu";
 import { ModalNewUser, ConfirmDelItem } from "./modais";
 
 function Users() {
@@ -9,6 +9,7 @@ function Users() {
     const [showUserModal, setShowUserModal] = useState(false);
     const [showDelModal, setShowDelModal] = useState(false);
     const [userIdSelected, setUserIdSelected] = useState(null);
+    const [selectedUser, setSelectedUser] = useState(null);
 
     useEffect(() => {
         fetchUsers();
@@ -16,7 +17,7 @@ function Users() {
 
     const fetchUsers = async () => {
         try {
-            const response = await api.get('./users/');
+            const response = await api.get('/users/');
             setusers(response.data);
         } catch (error) {
             console.error("Erro ao buscar usuários", error)
@@ -26,6 +27,11 @@ function Users() {
     const confirmDelete = (id) => {
         setUserIdSelected(id);
         setShowDelModal(true);
+    };
+
+    const handleEdit = (user) => {
+        setSelectedUser(user);
+        setShowUserModal(true);
     };
 
     const handleExecuteDelete = async () => {
@@ -52,48 +58,72 @@ function Users() {
     };
 
     return (
-        <div style={{ width: '100%', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
-
-
+        <div className="com-sidebar page-shell">
             <div>
-
-
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#3f4d67' }}>
+                <h2 className="page-title">
                     <LuUsers color="#3f4d67" /> Usuários
                 </h2>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button variant='primary' onClick={() => setShowUserModal(true)} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff' , fontSize: '15px' }}> <LuUserRoundPlus size={20} /> Novo Usuário </button>
+                <div className="actions-right">
+                    <button
+                        variant='primary'
+                        onClick={() => {
+                            setSelectedUser(null);
+                            setShowUserModal(true);
+                        }}
+                        className="primary-btn"
+                    >
+                        <LuUserRoundPlus size={20} /> Novo Usuário
+                    </button>
                 </div>
 
-                <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
+                <div className="table-wrapper">
+                    <table className="data-table">
                     <thead>
-                        <tr style={{ borderBottom: '2px solid #3f4d67', textAlign: 'left', color: '#3f4d67' }}>
-                            <th style={{ padding: '10px' }}>ID</th>
-                            <th style={{ padding: '10px' }}>Nome</th>
-                            <th style={{ padding: '10px' }}>Setor</th>
-                            <th style={{ padding: '10px' }}>Função</th>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Setor</th>
+                            <th>Função</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {users.map((op, index) => (
-                            <tr key={index} style={{ borderBottom: '1px solid #3f4d67', color: '#3f4d67' }}>
-                                <td style={{ padding: '10px' }}>{op.id}</td>
-                                <td style={{ padding: '10px' }}>{op.username}</td>
-                                <td style={{ padding: '10px' }}>{op.workstation_name}</td>
-                                <td style={{ padding: '10px', fontWeight: 'bold' }}>{op.role}</td>
-                                <td onClick={() => confirmDelete(op.id)} style={{ color: 'red', cursor: 'pointer' }}><CiTrash /></td>
+                        {users.map((op) => (
+                            <tr key={op.id}>
+                                <td>{op.id}</td>
+                                <td>{op.username}</td>
+                                <td>{op.workstation_name}</td>
+                                <td className="cell-strong">{op.role}</td>
+                                <td className="cell-actions">
+                                    <LuPencil
+                                    size={18}
+                                    style={{ cursor: 'pointer', color: '#3f4d67' }}
+                                    onClick={() => handleEdit(op)}
+                                />
+                                <CiTrash
+                                    size={18}
+                                    style={{ cursor: 'pointer', color: 'red' }}
+                                    onClick={() => confirmDelete(op.id)}
+                                />
+                                </td>
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                    </table>
+                </div>
 
             </div>
 
             <ModalNewUser
+                key={selectedUser?.id ?? 'new-user'}
                 show={showUserModal}
-                handleClose={() => setShowUserModal(false)}
+                handleClose={() => {
+                    setShowUserModal(false);
+                    setSelectedUser(null);
+                }}
                 refreshList={fetchUsers}
+                initialData={selectedUser}
             />
 
             <ConfirmDelItem

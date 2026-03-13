@@ -18,6 +18,12 @@ class DatabaseConfig(Base):
         onupdate=datetime.datetime.utcnow,
     )
 
+class Role(Base):
+    __tablename__ = "roles"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    permissions = Column(JSONB, nullable=False, default=list)
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -26,7 +32,9 @@ class User(Base):
     password_hash = Column(String)
     workstation_id = Column(Integer, ForeignKey("workstations.id"))
     workstation = relationship("Workstation")
-    role = Column(String)
+    role = Column(String)  # nome da função (legado + cache)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
+    role_obj = relationship("Role")
     total_points = Column(Integer, default=0)
 
 class Product(Base):

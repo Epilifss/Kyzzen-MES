@@ -8,6 +8,7 @@ import Orders from './Orders';
 import Workstations from './Workstations';
 import Sidebar from './Sidebar';
 import Configs from './Configs';
+import Roles from './Roles';
 
 // Função para proteger as rotas
 const PrivateRoute = ({ children }) => {
@@ -18,9 +19,9 @@ const PrivateRoute = ({ children }) => {
 // Componente de Layout para incluir a Sidebar lateralmente
 const MainLayout = ({ children }) => {
   return (
-    <div style={{ display: 'flex' }}>
+    <div className="app-shell">
       <Sidebar />
-      <div style={{ flex: 1, backgroundColor: '#f4f7fa', padding: '20px' }}>
+      <div className="app-content">
         {children}
       </div>
     </div>
@@ -83,6 +84,17 @@ function App() {
             <PrivateRoute>
               <MainLayout>
                 <Configs />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/roles"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Roles />
               </MainLayout>
             </PrivateRoute>
           }

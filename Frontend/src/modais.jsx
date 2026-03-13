@@ -6,7 +6,6 @@ import Modal from 'react-bootstrap/Modal';
 
 import api from './api';
 
-
 const resetDatabaseConfigForm = (setFormData, initialValue = null) => {
     setFormData({
         id: initialValue?.id ?? null,
@@ -23,93 +22,209 @@ const resetDatabaseConfigForm = (setFormData, initialValue = null) => {
     });
 };
 
-export function ModalNewUser({ show, handleClose, refreshList }) {
+export const ALL_PERMISSIONS = [
+    { key: 'dashboard', label: 'Início (Dashboard)' },
+    { key: 'orders', label: 'Pedidos' },
+    { key: 'users', label: 'Usuários' },
+    { key: 'workstations', label: 'Setores' },
+    { key: 'configs', label: 'Configurações de Banco' },
+    { key: 'roles', label: 'Funções (Perfis)' },
+];
+
+export function ModalRole({ show, handleClose, initialData = null, onSaved }) {
+    const [name, setName] = useState('');
+    const [selectedPerms, setSelectedPerms] = useState([]);
+
+    useEffect(() => {
+        if (show) {
+            setName(initialData?.name ?? '');
+            setSelectedPerms(initialData?.permissions ?? []);
+        }
+    }, [show, initialData]);
+
+    const togglePerm = (key) => {
+        setSelectedPerms(prev =>
+            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+        );
+    };
+
+    const save = async () => {
+        if (!name.trim()) { alert('Informe o nome da função.'); return; }
+        try {
+            let response;
+            if (initialData?.id) {
+                response = await api.put(`/roles/${initialData.id}`, { name: name.trim(), permissions: selectedPerms });
+            } else {
+                response = await api.post('/roles/', { name: name.trim(), permissions: selectedPerms });
+            }
+            if (response.status === 200 || response.status === 201) {
+                onSaved?.(response.data);
+                handleClose();
+            }
+        } catch (error) {
+            alert('Erro ao salvar função: ' + error.response?.data?.detail);
+        }
+    };
+
+    return (
+        <Modal show={show} onHide={handleClose}>
+            <Modal.Header closeButton>
+                <Modal.Title>{initialData?.id ? 'Editar Função' : 'Nova Função'}</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <Form>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Nome da Função</Form.Label>
+                        <Form.Control value={name} onChange={e => setName(e.target.value)} autoFocus />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Permissões de Acesso</Form.Label>
+                        {ALL_PERMISSIONS.map(p => (
+                            <Form.Check
+                                key={p.key}
+                                type="checkbox"
+                                label={p.label}
+                                checked={selectedPerms.includes(p.key)}
+                                onChange={() => togglePerm(p.key)}
+                            />
+                        ))}
+                    </Form.Group>
+                </Form>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={handleClose} style={{ backgroundColor: 'red' }}>Cancelar</Button>
+                <Button variant="primary" onClick={save}>Salvar</Button>
+            </Modal.Footer>
+        </Modal>
+    );
+}
+
+export function ModalNewUser({ show, handleClose, refreshList, initialData = null, onSaved }) {
 
     const [username, setUsername] = useState('');
     const [fullname, setFullname] = useState('');
     const [password, setPassword] = useState('');
-    const [workstation, setworkstation] = useState('0');
-    const [role, setRole] = useState('Admin');
+    const [workstation, setWorkstation] = useState('');
+    const [roleId, setRoleId] = useState('');
+    const [rolesList, setRolesList] = useState([]);
+    const [workstationsList, setWorkstationsList] = useState([]);
+    const [showRoleModal, setShowRoleModal] = useState(false);
 
-    const cancel = async (e) => {
-        if (e) e.preventDefault();
+    const reset = () => {
+        setUsername('');
+        setFullname('');
+        setPassword('');
+        setWorkstation('');
+        setRoleId('');
+    };
 
+    const fetchRoles = async () => {
         try {
-            handleClose();
-
-            setUsername('');
-            setFullname('');
-            setPassword('');
+            const response = await api.get('/roles/');
+            setRolesList(response.data);
         } catch (error) {
-            console.log("Erro ao limpar os campos: " + error.response?.data?.detail)
+            console.error("Erro ao buscar funções:", error);
         }
-    }
+    };
 
-    const csl = async (e) => {
-        if (e) e.preventDefault();
+    useEffect(() => {
+        if (!show) {
+            reset();
+            return;
+        }
 
-        try {
+        if (initialData?.id) {
+            setUsername(initialData.username ?? '');
+            setFullname(initialData.full_name ?? initialData.fullname ?? '');
+            setPassword('');
+            setWorkstation(initialData.workstation_id ? String(initialData.workstation_id) : '');
+            setRoleId(initialData.role_id ? String(initialData.role_id) : '');
+            return;
+        }
 
-            const dadosParaEnviar = {
-                username: username,
-                full_name: fullname,
-                password: password,
-                workstation_id: workstation,
-                role: role
+        reset();
+    }, [show, initialData?.id]);
+
+    useEffect(() => {
+        if (show) {
+            const fetchWorkstations = async () => {
+                try {
+                    const response = await api.get('/workstations/');
+                    setWorkstationsList(response.data);
+                } catch (error) {
+                    console.error("Erro ao buscar setores:", error);
+                }
             };
+            fetchWorkstations();
+            fetchRoles();
+        }
+    }, [show]);
 
-            const response = await api.post('/users/', dadosParaEnviar);
+    const handleRoleSaved = (newRole) => {
+        setRolesList(prev => {
+            const exists = prev.find(r => r.id === newRole.id);
+            if (exists) return prev.map(r => r.id === newRole.id ? newRole : r);
+            return [...prev, newRole];
+        });
+        setRoleId(String(newRole.id));
+    };
 
-            if (response.status === 201 || response.status === 200) {
+    const save = async () => {
+        if (!username || (!initialData?.id && !password)) {
+            alert('Usuário e senha são obrigatórios.');
+            return;
+        }
+        try {
+            let response;
+            if (initialData?.id) {
+                response = await api.put(`/users/${initialData.id}`, {
+                    username: username.trim(),
+                    full_name: fullname,
+                    password,
+                    workstation_id: workstation ? parseInt(workstation, 10) : 0,
+                    role_id: roleId ? parseInt(roleId, 10) : null,
+                });
+            } else {
+                response = await api.post(`/users/`, {
+                    username,
+                    full_name: fullname,
+                    password,
+                    workstation_id: workstation ? parseInt(workstation, 10) : 0,
+                    role_id: roleId ? parseInt(roleId, 10) : null,
+                });
+            }
+            if (response.status === 200 || response.status === 201) {
                 refreshList();
-
+                onSaved?.(response.data);
                 handleClose();
-
-                setUsername('');
-                setFullname('');
-                setPassword('');
-
+                reset();
             }
         } catch (error) {
             alert('Erro ao tentar criar novo usuário: ' + error.response?.data?.detail);
         }
-    }
-
-    const [workstationsList, setWorkstationsList] = useState([])
-
-    useEffect(() => {
-        const fetchWorkstations = async () => {
-            try {
-                const response = await api.get('/workstations/');
-                setWorkstationsList(response.data)
-            } catch (error) {
-                console.error("Erro ao buscar setores:", error);
-            }
-        };
-        fetchWorkstations();
-    }, []);
+    };
 
     return (
         <>
             <Modal show={show} onHide={handleClose}>
                 <Modal.Header closeButton>
-                    <Modal.Title>Criar novo usuário</Modal.Title>
+                    <Modal.Title>{initialData?.id ? 'Editar Usuário' : 'Novo Usuário'}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <Form>
                         <Form.Group className="mb-3">
                             <Form.Label>Usuário</Form.Label>
                             <Form.Control
-                                type="username"
+                                type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 autoFocus
                             />
                         </Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label>Sobrenome</Form.Label>
+                            <Form.Label>Nome Completo</Form.Label>
                             <Form.Control
-                                type="fullname"
+                                type="text"
                                 value={fullname}
                                 onChange={(e) => setFullname(e.target.value)}
                             />
@@ -122,43 +237,49 @@ export function ModalNewUser({ show, handleClose, refreshList }) {
                                 onChange={(e) => setPassword(e.target.value)}
                             />
                         </Form.Group>
-                        <Form.Group
-                            className="mb-3"
-                        >
+                        <Form.Group className="mb-3">
                             <Form.Label>Setor</Form.Label>
-                            <Form.Select onChange={(e) => setworkstation(e.target.value)}>
-
+                            <Form.Select value={workstation} onChange={(e) => setWorkstation(e.target.value)}>
                                 <option value="">Selecione um setor...</option>
                                 {workstationsList.map((ws) => (
-                                    <option key={ws.id} value={ws.id}>
-                                        {ws.name}
-                                    </option>
+                                    <option key={ws.id} value={ws.id}>{ws.name}</option>
                                 ))}
                             </Form.Select>
                         </Form.Group>
-                        <Form.Group
-                            className="mb-3"
-                        >
-                            <Form.Label>Função</Form.Label>
-                            <Form.Select value={role}
-                                onChange={(e) => setRole(e.target.value)}
-                            >
-                                <option value="Admin">Admin</option>
-                                <option value="Trançador">Trançador</option>
-                                <option value="Vendedor">Vendedor</option>
+                        <Form.Group className="mb-3">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <Form.Label className="mb-0">Função</Form.Label>
+                                <Button
+                                    size="sm"
+                                    variant="outline-primary"
+                                    onClick={() => setShowRoleModal(true)}
+                                    title="Criar nova função"
+                                    style={{ lineHeight: 1, padding: '0 6px' }}
+                                >+</Button>
+                            </div>
+                            <Form.Select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+                                <option value="">Selecione uma função...</option>
+                                {rolesList.map((r) => (
+                                    <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
                             </Form.Select>
                         </Form.Group>
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button variant="secondary" onClick={() => { cancel(); handleClose() }} style={{ backgroundColor: 'red' }}>
+                    <Button variant="secondary" onClick={() => { reset(); handleClose(); }} style={{ backgroundColor: 'red' }}>
                         Cancelar
                     </Button>
-                    <Button variant="primary" onClick={() => { csl(); handleClose() }}>
-                        Adicionar
+                    <Button variant="primary" onClick={save}>
+                        Salvar
                     </Button>
                 </Modal.Footer>
             </Modal>
+            <ModalRole
+                show={showRoleModal}
+                handleClose={() => setShowRoleModal(false)}
+                onSaved={handleRoleSaved}
+            />
         </>
     );
 }

@@ -33,59 +33,57 @@ function Orders() {
     };
 
     return (
-        <div style={{ width: '100%', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column' }}>
-
-
+        <div className="com-sidebar page-shell">
             <div>
-
-
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#3f4d67' }}>
+                <h2 className="page-title">
                     <LuBookPlus color="#3f4d67" /> Pedidos
                 </h2>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div style={{ color: '#5f6c81' }}>
+                <div className="page-toolbar">
+                    <div className="muted-text intro-text">
                         {configName ? `Exibindo dados externos da configuração ${configName}.` : 'Configure e selecione campos na aba de configurações para carregar os pedidos externos.'}
                     </div>
-                    <button onClick={fetchOrders} disabled={loadingOrders} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderRadius: '10px', backgroundColor: '#3f4d67', color: '#fff', fontSize: '15px' }}>
+                    <button onClick={fetchOrders} disabled={loadingOrders} className="primary-btn">
                         <LuRefreshCw size={20} /> {loadingOrders ? 'Atualizando...' : 'Atualizar pedidos'}
                     </button>
                 </div>
 
                 {ordersError && (
-                    <div style={{ padding: '12px', backgroundColor: '#fef3f2', color: '#b42318', borderRadius: '8px', marginBottom: '12px' }}>
+                    <div className="alert-error">
                         {ordersError}
                     </div>
                 )}
 
-                <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
+                <div className="table-wrapper">
+                    <table className="data-table">
                     <thead>
-                        <tr style={{ borderBottom: '2px solid #3f4d67', textAlign: 'left', color: '#3f4d67' }}>
+                        <tr>
                             {orderFields.map((field) => (
-                                <th key={field} style={{ padding: '10px' }}>{field}</th>
+                                <th key={field}>{field}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
                         {orders.length === 0 && (
                             <tr>
-                                <td colSpan={Math.max(orderFields.length, 1)} style={{ padding: '20px', color: '#5f6c81', textAlign: 'center' }}>
+                                <td colSpan={Math.max(orderFields.length, 1)} className="cell-empty">
                                     {loadingOrders ? 'Carregando pedidos...' : 'Nenhum pedido encontrado para os campos selecionados.'}
                                 </td>
                             </tr>
                         )}
 
                         {orders.map((order, index) => (
-                            <tr key={index} style={{ borderBottom: '1px solid #3f4d67', color: '#3f4d67' }}>
+                            <tr key={index}>
                                 {orderFields.map((field) => (
-                                    <td key={`${index}-${field}`} style={{ padding: '10px', fontWeight: field === 'pedido' ? 'bold' : 'normal' }}>
+                                    <td key={`${index}-${field}`} className={field === 'pedido' ? 'cell-strong' : ''}>
                                         {order[field] === null || order[field] === undefined ? '' : String(order[field])}
                                     </td>
                                 ))}
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                    </table>
+                </div>
 
             </div>
         </div>

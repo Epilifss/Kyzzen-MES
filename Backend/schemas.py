@@ -51,13 +51,37 @@ class ExternalOrdersResponse(BaseModel):
     fields: List[str]
     rows: List[dict]
 
+# Esquemas de Funções (Roles)
+class RoleCreate(BaseModel):
+    name: str
+    permissions: List[str] = []
+
+class RoleUpdate(BaseModel):
+    name: str
+    permissions: List[str] = []
+
+class RoleOut(BaseModel):
+    id: int
+    name: str
+    permissions: List[str] = []
+
+    class Config:
+        from_attributes = True
+
 # Esquema para criar um Usuário
 class UserCreate(BaseModel):
     username: str
     full_name: str
     password: str
     workstation_id: int
-    role: Optional[str] = "operator"
+    role_id: Optional[int] = None
+
+class UserUpdate(BaseModel):
+    username: str
+    full_name: str
+    password: Optional[str] = None
+    workstation_id: int
+    role_id: Optional[int] = None
 
 # Esquema para criar um setor
 class WorkstationOut(BaseModel):
@@ -74,6 +98,9 @@ class UserOut(BaseModel):
     username: str
     full_name: str
     role: str
+    role_id: Optional[int] = None
+    workstation_id: Optional[int] = None
+    permissions: List[str] = []
     workstation_name: str
 
     class Config:

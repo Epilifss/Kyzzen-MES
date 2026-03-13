@@ -9,8 +9,15 @@ import auth
 from typing import List, Optional
 from urllib.parse import quote_plus
 
-# models.Base.metadata.drop_all(bind=engine) 
+# models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
+
+# Migration: adiciona role_id à tabela users se ainda não existir
+with engine.connect() as _conn:
+    _conn.execute(text(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL"
+    ))
+    _conn.commit()
 
 app = FastAPI()
 
@@ -376,64 +383,164 @@ def get_external_orders(db: Session = Depends(get_db)):
         if external_engine is not None:
             external_engine.dispose()
 
+# --- ROTAS DE FUNÇÕES (ROLES) ---
+
+@app.get("/roles/", response_model=list[schemas.RoleOut])
+def list_roles(db: Session = Depends(get_db)):
+    return db.query(models.Role).order_by(models.Role.name.asc()).all()
+
+@app.post("/roles/", response_model=schemas.RoleOut)
+def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db)):
+    if db.query(models.Role).filter(models.Role.name == role.name).first():
+        raise HTTPException(status_code=400, detail="Função já cadastrada")
+    new_role = models.Role(name=role.name, permissions=role.permissions)
+    db.add(new_role)
+    db.commit()
+    db.refresh(new_role)
+    return new_role
+
+@app.put("/roles/{role_id}", response_model=schemas.RoleOut)
+def update_role(role_id: int, role: schemas.RoleUpdate, db: Session = Depends(get_db)):
+    db_role = db.query(models.Role).filter(models.Role.id == role_id).first()
+    if not db_role:
+        raise HTTPException(status_code=404, detail="Função não encontrada")
+    existing = db.query(models.Role).filter(models.Role.name == role.name, models.Role.id != role_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Já existe uma função com esse nome")
+    db_role.name = role.name
+    db_role.permissions = role.permissions
+    db.commit()
+    db.refresh(db_role)
+    return db_role
+
+@app.delete("/roles/{role_id}")
+def delete_role(role_id: int, db: Session = Depends(get_db)):
+    db_role = db.query(models.Role).filter(models.Role.id == role_id).first()
+    if not db_role:
+        raise HTTPException(status_code=404, detail="Função não encontrada")
+    db.delete(db_role)
+    db.commit()
+    return {"detail": "Função deletada"}
+
 # --- ROTAS DE USUÁRIOS ---
 
 @app.get("/users/", response_model=list[schemas.UserOut])
 def get_users(db: Session = Depends(get_db)):
     users = db.query(models.User).all()
-    
     results = []
     for user in users:
+        role_obj = db.query(models.Role).filter(models.Role.id == user.role_id).first() if user.role_id else None
         results.append({
             "id": user.id,
             "username": user.username,
             "full_name": user.full_name,
-            "role": user.role,
+            "role": role_obj.name if role_obj else (user.role or ""),
+            "role_id": user.role_id,
+            "workstation_id": user.workstation_id,
+            "permissions": role_obj.permissions if role_obj else [],
             "workstation_name": user.workstation.name if user.workstation else "Sem Setor"
         })
-    
     return results
 
 @app.get("/users/{user_id}", response_model=schemas.UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)):
-    # Busca um usuário específico pelo ID
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    return db_user
+    role_obj = db.query(models.Role).filter(models.Role.id == db_user.role_id).first() if db_user.role_id else None
+    return {
+        "id": db_user.id,
+        "username": db_user.username,
+        "full_name": db_user.full_name,
+        "role": role_obj.name if role_obj else (db_user.role or ""),
+        "role_id": db_user.role_id,
+        "workstation_id": db_user.workstation_id,
+        "permissions": role_obj.permissions if role_obj else [],
+        "workstation_name": db_user.workstation.name if db_user.workstation else "Sem Setor"
+    }
 
 @app.post("/users/", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # 1. Verificar se o usuário já existe
-    db_user = db.query(models.User).filter(models.User.username == user.username).first()
-    if db_user:
+    if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    # 2. Buscar a workstation no banco para pegar o nome dela
     workstation = db.query(models.Workstation).filter(models.Workstation.id == user.workstation_id).first()
     if not workstation:
         raise HTTPException(status_code=404, detail="Workstation not found")
 
-    # 3. Criar o novo usuário (Salvando o ID no banco)
+    role_obj = None
+    if user.role_id:
+        role_obj = db.query(models.Role).filter(models.Role.id == user.role_id).first()
+        if not role_obj:
+            raise HTTPException(status_code=404, detail="Função não encontrada")
+
     new_user = models.User(
         username=user.username,
         full_name=user.full_name,
         password_hash=auth.get_psw_hash(user.password),
-        workstation_id=user.workstation_id, # Salva o número 0, 1, 2...
-        role=user.role
+        workstation_id=user.workstation_id,
+        role=role_obj.name if role_obj else "",
+        role_id=user.role_id,
     )
-    
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # 4. Retornar os dados no formato que o UserOut espera (com o nome)
     return {
         "id": new_user.id,
         "username": new_user.username,
         "full_name": new_user.full_name,
-        "role": new_user.role,
-        "workstation_name": workstation.name # Aqui enviamos o "Nome" em vez do "ID"
+        "role": role_obj.name if role_obj else "",
+        "role_id": new_user.role_id,
+        "workstation_id": new_user.workstation_id,
+        "permissions": role_obj.permissions if role_obj else [],
+        "workstation_name": workstation.name,
+    }
+
+@app.put("/users/{user_id}", response_model=schemas.UserOut)
+def update_user(user_id: int, user: schemas.UserUpdate, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    existing = (
+        db.query(models.User)
+        .filter(models.User.username == user.username, models.User.id != user_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    workstation = db.query(models.Workstation).filter(models.Workstation.id == user.workstation_id).first()
+    if not workstation:
+        raise HTTPException(status_code=404, detail="Workstation not found")
+
+    role_obj = None
+    if user.role_id:
+        role_obj = db.query(models.Role).filter(models.Role.id == user.role_id).first()
+        if not role_obj:
+            raise HTTPException(status_code=404, detail="Função não encontrada")
+
+    db_user.username = user.username
+    db_user.full_name = user.full_name
+    db_user.workstation_id = user.workstation_id
+    db_user.role_id = user.role_id
+    db_user.role = role_obj.name if role_obj else ""
+
+    if user.password:
+        db_user.password_hash = auth.get_psw_hash(user.password)
+
+    db.commit()
+    db.refresh(db_user)
+    return {
+        "id": db_user.id,
+        "username": db_user.username,
+        "full_name": db_user.full_name,
+        "role": role_obj.name if role_obj else (db_user.role or ""),
+        "role_id": db_user.role_id,
+        "workstation_id": db_user.workstation_id,
+        "permissions": role_obj.permissions if role_obj else [],
+        "workstation_name": workstation.name,
     }
 
 @app.delete("/users/{user_id}")
@@ -441,7 +548,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    
     db.delete(db_user)
     db.commit()
     return {"detail": "Usuário deletado"}
@@ -548,12 +654,18 @@ def finish_production(log_id: int, db: Session = Depends(get_db)):
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
-    
+
     if not user or not auth.verify_psw(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
-    
+
+    permissions: List[str] = []
+    if user.role_id:
+        role = db.query(models.Role).filter(models.Role.id == user.role_id).first()
+        if role:
+            permissions = role.permissions or []
+
     access_token = auth.create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "permissions": permissions}
 
 # --- ROTA DE RANKINGS ---
 
