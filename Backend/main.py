@@ -627,6 +627,31 @@ def orders_report_summary(db: Session = Depends(get_db)):
         "today_imported": today_imported,
     }
 
+# --- ROTA DE TIPOS DE MATERIAIS ---
+
+@app.get("/material_types/", response_model=list[schemas.MaterialTypeOut])
+def get_material_types(db: Session = Depends(get_db)):
+    """Listar pedidos que foram importados"""
+    return db.query(models.MaterialTypes).all()
+
+@app.post("/material_types/", response_model=schemas.MaterialTypeCreate)
+def create_material_type(material: schemas.MaterialTypeCreate, db: Session = Depends(get_db)):
+    if db.query(models.MaterialTypes).filter(models.MaterialTypes.name == material.name).first():
+        raise HTTPException(status_code=400, detail="material name already registered")
+
+    new_material = models.MaterialTypes(
+        name=material.name
+    )
+    db.add(new_material)
+    db.commit()
+    db.refresh(new_material)
+
+    return {
+        "id": new_material.id,
+        "name": new_material.name
+    }
+
+
 
 # --- ROTAS DE FUNÇÕES (ROLES) ---
 
@@ -842,7 +867,7 @@ def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)
         desc=product.desc,
         line=product.line,
         base_points=product.base_points,
-        product_data={}
+        product_data=product.product_data or {}
     )
     db.add(new_product)
     db.commit()
@@ -875,6 +900,7 @@ def update_product(product_id: int, product: schemas.ProductUpdate, db: Session 
     db_products.desc = product.desc
     db_products.line = product.line
     db_products.base_points = product.base_points
+    db_products.product_data = product.product_data or {}
 
     db.commit()
     db.refresh(db_products)
@@ -883,12 +909,22 @@ def update_product(product_id: int, product: schemas.ProductUpdate, db: Session 
         "cod": db_products.cod,
         "desc": db_products.desc,
         "line": db_products.line,
-        "base_points": db_products.base_points
+        "base_points": db_products.base_points,
+        "product_data": db_products.product_data,
     }
 
 @app.get("/products/", response_model=List[schemas.ProductOut])
 def list_products(db: Session = Depends(get_db)):
     return db.query(models.Product).all()
+
+@app.delete("/products/{product_id}")
+def delete_products(product_id: int, db: Session = Depends(get_db)):
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Produto não encontrada")
+    db.delete(db_product)
+    db.commit()
+    return {"detail": "Produto deletado"}
 
 # --- ROTA DE REGISTRO DE PRODUÇÃO ---
 

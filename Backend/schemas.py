@@ -78,6 +78,7 @@ class ImportedOrderIn(BaseModel):
     order_data: dict
     order_items: Optional[List[dict]] = None
 
+
 class ImportedOrderOut(BaseModel):
     id: int
     external_id: str
@@ -89,6 +90,7 @@ class ImportedOrderOut(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class ImportOrdersRequest(BaseModel):
     config_id: int
@@ -115,13 +117,17 @@ class OrdersReportSummary(BaseModel):
     today_imported: int
 
 # Esquemas de Funções (Roles)
+
+
 class RoleCreate(BaseModel):
     name: str
     permissions: List[str] = []
 
+
 class RoleUpdate(BaseModel):
     name: str
     permissions: List[str] = []
+
 
 class RoleOut(BaseModel):
     id: int
@@ -132,12 +138,15 @@ class RoleOut(BaseModel):
         from_attributes = True
 
 # Esquema para criar um Usuário
+
+
 class UserCreate(BaseModel):
     username: str
     full_name: str
     password: str
     workstation_id: int
     role_id: Optional[int] = None
+
 
 class UserUpdate(BaseModel):
     username: str
@@ -147,6 +156,8 @@ class UserUpdate(BaseModel):
     role_id: Optional[int] = None
 
 # Esquema para criar um setor
+
+
 class WorkstationOut(BaseModel):
     id: int
     name: str
@@ -156,6 +167,8 @@ class WorkstationOut(BaseModel):
         from_attributes = True
 
 # Esquema para ler um Usuário (o que a API devolve)
+
+
 class UserOut(BaseModel):
     id: int
     username: str
@@ -170,31 +183,48 @@ class UserOut(BaseModel):
         from_attributes = True
 
 # Esquema para criar um Produto
+
+
 class ProductCreate(BaseModel):
     cod: str
     desc: str
     line: str
     base_points: int
     product_data: Optional[dict] = None
-    
+
+
 class ProductUpdate(BaseModel):
     cod: str
     desc: str
     line: str
     base_points: int
+    product_data: Optional[dict] = None
 
 # Esquema para retorno de Produto
+
+
 class ProductOut(BaseModel):
     id: int
     cod: str
     desc: str
     line: str
     base_points: int
+    product_data: Optional[dict] = None
 
     class Config:
         from_attributes = True
 
+
+class MaterialTypeCreate(BaseModel):
+    name: str
+
+class MaterialTypeOut(BaseModel):
+    id: int
+    name: str
+
 # Esquema para registrar produção (O que o operador envia)
+
+
 class ProductionLogCreate(BaseModel):
     user_id: int
     workstation_id: int
@@ -202,9 +232,12 @@ class ProductionLogCreate(BaseModel):
     quantity: float
 
 # Esquema para retorno de Setor
+
+
 class WorkstationCreate(BaseModel):
     name: str
     head: str
+
 
 class OrdersOut(BaseModel):
     op: int

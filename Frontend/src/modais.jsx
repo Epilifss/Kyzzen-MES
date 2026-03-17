@@ -103,6 +103,54 @@ export function ModalRole({ show, handleClose, initialData = null, onSaved }) {
     );
 }
 
+export function ModalMaterial({ show, handleClose, initialData = null, onSaved }) {
+    const [name, setName] = useState('');
+
+    useEffect(() => {
+        if (show) {
+            setName(initialData?.name ?? '');
+        }
+    }, [show, initialData]);
+
+    const save = async () => {
+        if (!name.trim()) { alert('Informe o nome do material.'); return; }
+        try {
+            let response;
+            if (initialData?.id) {
+                response = await api.put(`/material_types/${initialData.id}`, { name: name.trim() });
+            } else {
+                response = await api.post('/material_types/', { name: name });
+            }
+            if (response.status === 200 || response.status === 201) {
+                onSaved?.(response.data);
+                handleClose();
+            }
+        } catch (error) {
+            alert('Erro ao salvar material: ' + error.response?.data?.detail);
+        }
+    };
+
+    return (
+        <Modal show={show} onHide={handleClose}>
+            <Modal.Header closeButton>
+                <Modal.Title>{initialData?.id ? 'Editar Material' : 'Novo Material'}</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <Form>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Nome do Material</Form.Label>
+                        <Form.Control value={name} onChange={e => setName(e.target.value)} autoFocus />
+                    </Form.Group>
+                </Form>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={handleClose} style={{ backgroundColor: 'red' }}>Cancelar</Button>
+                <Button variant="primary" onClick={save}>Salvar</Button>
+            </Modal.Footer>
+        </Modal>
+    );
+}
+
 export function ModalNewUser({ show, handleClose, refreshList, initialData = null, onSaved }) {
 
     const [username, setUsername] = useState('');
@@ -294,25 +342,25 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
     const [desc, setDesc] = useState('');
     const [line, setLine] = useState('');
     const [base_points, setPoints] = useState('');
-    // const [workstation, setWorkstation] = useState('');
-    // const [roleId, setRoleId] = useState('');
-    // const [rolesList, setRolesList] = useState([]);
-    // const [workstationsList, setWorkstationsList] = useState([]);
-    // const [showRoleModal, setShowRoleModal] = useState(false);
+    const [materialIds, setMaterialIds] = useState([]);
+    const [materialList, setMaterialList] = useState([]);
+    const [showMaterialModal, setShowMaterialModal] = useState(false);
 
     const reset = () => {
         setCod('');
         setDesc('');
         setLine('');
         setPoints('');
+        setMaterialIds([]);
     };
 
-    const fetchProducts = async () => {
+    const fetchMaterialTypes = async () => {
         try {
-            const response = await api.get('/products/');
-            setProductsList(response.data);
+            const response = await api.get('/material_types/');
+            setMaterialList(response.data || []);
         } catch (error) {
-            console.error("Erro ao buscar produtos:", error);
+            console.error("Erro ao buscar tipo de materiais:", error);
+            setMaterialList([]);
         }
     };
 
@@ -322,56 +370,52 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
             return;
         }
 
+        fetchMaterialTypes();
+
         if (initialData?.id) {
             setCod(initialData.cod ?? '');
             setDesc(initialData.desc ?? '');
             setLine(initialData.line ?? '');
             setPoints(initialData.base_points ?? '');
-            // setWorkstation(initialData.workstation_id ? String(initialData.workstation_id) : '');
-            // setRoleId(initialData.role_id ? String(initialData.role_id) : '');
+            const selected = initialData.product_data?.material_type_ids || [];
+            setMaterialIds(Array.isArray(selected) ? selected.map((id) => String(id)) : []);
             return;
         }
 
         reset();
     }, [show, initialData?.id]);
 
-    // useEffect(() => {
-    //     if (show) {
-    //         const fetchWorkstations = async () => {
-    //             try {
-    //                 const response = await api.get('/workstations/');
-    //                 setWorkstationsList(response.data);
-    //             } catch (error) {
-    //                 console.error("Erro ao buscar setores:", error);
-    //             }
-    //         };
-    //         fetchWorkstations();
-    //         fetchRoles();
-    //     }
-    // }, [show]);
-
-    // const handleRoleSaved = (newRole) => {
-    //     setRolesList(prev => {
-    //         const exists = prev.find(r => r.id === newRole.id);
-    //         if (exists) return prev.map(r => r.id === newRole.id ? newRole : r);
-    //         return [...prev, newRole];
-    //     });
-    //     setRoleId(String(newRole.id));
-    // };
-
     const save = async () => {
-        if (!cod || (!initialData?.id && !desc)) {
-            alert('Código e descrição do produto são obrigatórios.');
+        if (!cod || !desc || !line) {
+            alert('Código, descrição e linha são obrigatórios.');
             return;
         }
+
+        const pointsValue = parseInt(base_points, 10);
+        if (Number.isNaN(pointsValue)) {
+            alert('Informe um valor numérico válido em pontos.');
+            return;
+        }
+
         try {
+            const selectedMaterialIds = materialIds.map((id) => parseInt(id, 10)).filter((id) => !Number.isNaN(id));
+            const selectedMaterialNames = materialList
+                .filter((material) => selectedMaterialIds.includes(material.id))
+                .map((material) => material.name);
+
+            const productData = {
+                material_type_ids: selectedMaterialIds,
+                material_type_names: selectedMaterialNames,
+            };
+
             let response;
             if (initialData?.id) {
                 response = await api.put(`/products/${initialData.id}`, {
                     cod: cod,
                     desc: desc,
                     line: line,
-                    base_points: base_points,
+                    base_points: pointsValue,
+                    product_data: productData,
                     // workstation_id: workstation ? parseInt(workstation, 10) : 0,
                     // role_id: roleId ? parseInt(roleId, 10) : null,
                 });
@@ -380,7 +424,8 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
                     cod,
                     desc,
                     line,
-                    base_points,
+                    base_points: pointsValue,
+                    product_data: productData,
                     // workstation_id: workstation ? parseInt(workstation, 10) : 0,
                     // role_id: roleId ? parseInt(roleId, 10) : null,
                 });
@@ -437,33 +482,38 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
                                 onChange={(e) => setPoints(e.target.value)}
                             />
                         </Form.Group>
-                        {/* <Form.Group className="mb-3">
-                            <Form.Label>Setor</Form.Label>
-                            <Form.Select value={workstation} onChange={(e) => setWorkstation(e.target.value)}>
-                                <option value="">Selecione um setor...</option>
-                                {workstationsList.map((ws) => (
-                                    <option key={ws.id} value={ws.id}>{ws.name}</option>
-                                ))}
-                            </Form.Select>
-                        </Form.Group>
-                        <Form.Group className="mb-3">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                <Form.Label className="mb-0">Função</Form.Label>
-                                <Button
+                        <Form.Group>
+                            <Form.Label>Tipos de materiais (marque um ou mais)</Form.Label>
+                            <Button
                                     size="sm"
                                     variant="outline-primary"
-                                    onClick={() => setShowRoleModal(true)}
-                                    title="Criar nova função"
+                                    onClick={() => setShowMaterialModal(true)}
+                                    title="Criar novo material"
                                     style={{ lineHeight: 1, padding: '0 6px' }}
                                 >+</Button>
-                            </div>
-                            <Form.Select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-                                <option value="">Selecione uma função...</option>
-                                {rolesList.map((r) => (
-                                    <option key={r.id} value={r.id}>{r.name}</option>
+                            <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '220px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                {materialList.length === 0 && (
+                                    <div style={{ color: '#5f6c81', fontSize: '14px' }}>Nenhum tipo de material cadastrado.</div>
+                                )}
+                                {materialList.map((material) => (
+                                    <Form.Check
+                                        key={material.id}
+                                        type="checkbox"
+                                        id={`product-material-${material.id}`}
+                                        label={material.name}
+                                        checked={materialIds.includes(String(material.id))}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setMaterialIds((current) => [...current, String(material.id)]);
+                                            } else {
+                                                setMaterialIds((current) => current.filter((id) => id !== String(material.id)));
+                                            }
+                                        }}
+                                        style={{ marginBottom: '8px' }}
+                                    />
                                 ))}
-                            </Form.Select>
-                        </Form.Group> */}
+                            </div>
+                        </Form.Group>
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>
@@ -475,11 +525,11 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
                     </Button>
                 </Modal.Footer>
             </Modal>
-            {/* <ModalRole
-                show={showRoleModal}
-                handleClose={() => setShowRoleModal(false)}
-                onSaved={handleRoleSaved}
-            /> */}
+            <ModalMaterial
+                show={showMaterialModal}
+                handleClose={() => setShowMaterialModal(false)}
+                onSaved={fetchMaterialTypes}
+            />
         </>
     );
 }
@@ -862,9 +912,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
 
                             <Form.Group className="mb-3">
                                 <Form.Label>Coluna para Deduplicação (opcional)</Form.Label>
-                                <Form.Select 
-                                    value={formData.distinct_column || ''} 
-                                    onChange={(e) => setFormData({...formData, distinct_column: e.target.value || null})}
+                                <Form.Select
+                                    value={formData.distinct_column || ''}
+                                    onChange={(e) => setFormData({ ...formData, distinct_column: e.target.value || null })}
                                 >
                                     <option value="">Nenhuma (não deduplica)</option>
                                     {availableFields.map((field) => (
@@ -888,9 +938,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
                                             checked={formData.order_detail_fields.includes(field)}
                                             onChange={(e) => {
                                                 if (e.target.checked) {
-                                                    setFormData({...formData, order_detail_fields: [...formData.order_detail_fields, field]});
+                                                    setFormData({ ...formData, order_detail_fields: [...formData.order_detail_fields, field] });
                                                 } else {
-                                                    setFormData({...formData, order_detail_fields: formData.order_detail_fields.filter(f => f !== field)});
+                                                    setFormData({ ...formData, order_detail_fields: formData.order_detail_fields.filter(f => f !== field) });
                                                 }
                                             }}
                                             style={{ marginBottom: '8px' }}
@@ -914,9 +964,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
                                             checked={formData.order_item_fields.includes(field)}
                                             onChange={(e) => {
                                                 if (e.target.checked) {
-                                                    setFormData({...formData, order_item_fields: [...formData.order_item_fields, field]});
+                                                    setFormData({ ...formData, order_item_fields: [...formData.order_item_fields, field] });
                                                 } else {
-                                                    setFormData({...formData, order_item_fields: formData.order_item_fields.filter(f => f !== field)});
+                                                    setFormData({ ...formData, order_item_fields: formData.order_item_fields.filter(f => f !== field) });
                                                 }
                                             }}
                                             style={{ marginBottom: '8px' }}
