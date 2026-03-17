@@ -323,6 +323,46 @@ button:focus-visible {
   margin: 1rem auto;
 }
 
+.cell-checkbox {
+  width: 50px;
+  text-align: center;
+}
+
+.cell-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-processing {
+  background-color: #bfdbfe;
+  color: #1e40af;
+}
+
+.status-badge.status-completed {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-badge.status-error {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
 @media (max-width: 1199px) {
   .com-sidebar {
     margin-left: 220px;

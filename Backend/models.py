@@ -43,9 +43,8 @@ class Product(Base):
     cod = Column(String, index=True)
     desc = Column(String, index=True)
     line = Column(String, index=True)
-    score = Column(Integer, default=0)
-    material_types = Column(JSONB, index=True)
-    components = Column(String, index=True)
+    base_points = Column(Integer, default=0)
+    product_data = Column(JSONB, nullable=True)
 
 class MaterialTypes(Base):
     __tablename__= "material_types"
@@ -93,6 +92,17 @@ class Orders(Base):
     aluminio = Column(Integer, unique=False)
     acabamento = Column(Integer, unique=False)
     filial = Column(String, unique=False)
+
+class ImportedOrder(Base):
+    __tablename__ = "imported_orders"
+    id = Column(Integer, primary_key=True, index=True)
+    external_id = Column(String, unique=True, index=True, nullable=False)
+    config_id = Column(Integer, ForeignKey("database_configs.id"), nullable=False)
+    order_data = Column(JSONB, nullable=False)
+    order_items = Column(JSONB, nullable=True, default=list)
+    import_status = Column(String, default="pending")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class ProductionLog(Base):
     __tablename__ = "production_logs"

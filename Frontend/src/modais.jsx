@@ -19,12 +19,16 @@ const resetDatabaseConfigForm = (setFormData, initialValue = null) => {
         custom_query: initialValue?.custom_query ?? '',
         has_password: initialValue?.has_password ?? false,
         selected_fields: initialValue?.selected_fields ?? [],
+        distinct_column: initialValue?.distinct_column ?? null,
+        order_detail_fields: initialValue?.order_detail_fields ?? [],
+        order_item_fields: initialValue?.order_item_fields ?? [],
     });
 };
 
 export const ALL_PERMISSIONS = [
     { key: 'dashboard', label: 'Início (Dashboard)' },
     { key: 'orders', label: 'Pedidos' },
+    { key: 'products', label: 'Produtos' },
     { key: 'users', label: 'Usuários' },
     { key: 'workstations', label: 'Setores' },
     { key: 'configs', label: 'Configurações de Banco' },
@@ -284,6 +288,202 @@ export function ModalNewUser({ show, handleClose, refreshList, initialData = nul
     );
 }
 
+export function ModalNewProduct({ show, handleClose, refreshList, initialData = null, onSaved }) {
+
+    const [cod, setCod] = useState('');
+    const [desc, setDesc] = useState('');
+    const [line, setLine] = useState('');
+    const [base_points, setPoints] = useState('');
+    // const [workstation, setWorkstation] = useState('');
+    // const [roleId, setRoleId] = useState('');
+    // const [rolesList, setRolesList] = useState([]);
+    // const [workstationsList, setWorkstationsList] = useState([]);
+    // const [showRoleModal, setShowRoleModal] = useState(false);
+
+    const reset = () => {
+        setCod('');
+        setDesc('');
+        setLine('');
+        setPoints('');
+    };
+
+    const fetchProducts = async () => {
+        try {
+            const response = await api.get('/products/');
+            setProductsList(response.data);
+        } catch (error) {
+            console.error("Erro ao buscar produtos:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (!show) {
+            reset();
+            return;
+        }
+
+        if (initialData?.id) {
+            setCod(initialData.cod ?? '');
+            setDesc(initialData.desc ?? '');
+            setLine(initialData.line ?? '');
+            setPoints(initialData.base_points ?? '');
+            // setWorkstation(initialData.workstation_id ? String(initialData.workstation_id) : '');
+            // setRoleId(initialData.role_id ? String(initialData.role_id) : '');
+            return;
+        }
+
+        reset();
+    }, [show, initialData?.id]);
+
+    // useEffect(() => {
+    //     if (show) {
+    //         const fetchWorkstations = async () => {
+    //             try {
+    //                 const response = await api.get('/workstations/');
+    //                 setWorkstationsList(response.data);
+    //             } catch (error) {
+    //                 console.error("Erro ao buscar setores:", error);
+    //             }
+    //         };
+    //         fetchWorkstations();
+    //         fetchRoles();
+    //     }
+    // }, [show]);
+
+    // const handleRoleSaved = (newRole) => {
+    //     setRolesList(prev => {
+    //         const exists = prev.find(r => r.id === newRole.id);
+    //         if (exists) return prev.map(r => r.id === newRole.id ? newRole : r);
+    //         return [...prev, newRole];
+    //     });
+    //     setRoleId(String(newRole.id));
+    // };
+
+    const save = async () => {
+        if (!cod || (!initialData?.id && !desc)) {
+            alert('Código e descrição do produto são obrigatórios.');
+            return;
+        }
+        try {
+            let response;
+            if (initialData?.id) {
+                response = await api.put(`/products/${initialData.id}`, {
+                    cod: cod,
+                    desc: desc,
+                    line: line,
+                    base_points: base_points,
+                    // workstation_id: workstation ? parseInt(workstation, 10) : 0,
+                    // role_id: roleId ? parseInt(roleId, 10) : null,
+                });
+            } else {
+                response = await api.post(`/products/`, {
+                    cod,
+                    desc,
+                    line,
+                    base_points,
+                    // workstation_id: workstation ? parseInt(workstation, 10) : 0,
+                    // role_id: roleId ? parseInt(roleId, 10) : null,
+                });
+            }
+            if (response.status === 200 || response.status === 201) {
+                refreshList();
+                onSaved?.(response.data);
+                handleClose();
+                reset();
+            }
+        } catch (error) {
+            alert('Erro ao tentar criar novo produto: ' + error.response?.data?.detail);
+        }
+    };
+
+    return (
+        <>
+            <Modal show={show} onHide={handleClose}>
+                <Modal.Header closeButton>
+                    <Modal.Title>{initialData?.id ? 'Editar Produto' : 'Novo Produto'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Código</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={cod}
+                                onChange={(e) => setCod(e.target.value)}
+                                autoFocus
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Descrição</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={desc}
+                                onChange={(e) => setDesc(e.target.value)}
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Linha</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={line}
+                                onChange={(e) => setLine(e.target.value)}
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Pontos</Form.Label>
+                            <Form.Control
+                                type="number"
+                                value={base_points}
+                                onChange={(e) => setPoints(e.target.value)}
+                            />
+                        </Form.Group>
+                        {/* <Form.Group className="mb-3">
+                            <Form.Label>Setor</Form.Label>
+                            <Form.Select value={workstation} onChange={(e) => setWorkstation(e.target.value)}>
+                                <option value="">Selecione um setor...</option>
+                                {workstationsList.map((ws) => (
+                                    <option key={ws.id} value={ws.id}>{ws.name}</option>
+                                ))}
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <Form.Label className="mb-0">Função</Form.Label>
+                                <Button
+                                    size="sm"
+                                    variant="outline-primary"
+                                    onClick={() => setShowRoleModal(true)}
+                                    title="Criar nova função"
+                                    style={{ lineHeight: 1, padding: '0 6px' }}
+                                >+</Button>
+                            </div>
+                            <Form.Select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+                                <option value="">Selecione uma função...</option>
+                                {rolesList.map((r) => (
+                                    <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
+                            </Form.Select>
+                        </Form.Group> */}
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => { reset(); handleClose(); }} style={{ backgroundColor: 'red' }}>
+                        Cancelar
+                    </Button>
+                    <Button variant="primary" onClick={save}>
+                        Salvar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+            {/* <ModalRole
+                show={showRoleModal}
+                handleClose={() => setShowRoleModal(false)}
+                onSaved={handleRoleSaved}
+            /> */}
+        </>
+    );
+}
+
 export function ModalNewWorkstation({ show, handleClose, refreshList }) {
 
     const [workstationName, setWorkstationName] = useState('');
@@ -400,6 +600,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
         custom_query: '',
         has_password: false,
         selected_fields: [],
+        distinct_column: null,
+        order_detail_fields: [],
+        order_item_fields: [],
     });
     const [availableFields, setAvailableFields] = useState([]);
     const [selectedFields, setSelectedFields] = useState([]);
@@ -512,6 +715,9 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
             table_name: formData.custom_query ? '' : formData.table_name,
             custom_query: formData.custom_query,
             selected_fields: selectedFields,
+            distinct_column: formData.distinct_column,
+            order_detail_fields: formData.order_detail_fields,
+            order_item_fields: formData.order_item_fields,
         };
 
         try {
@@ -633,25 +839,95 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
                     )}
 
                     {availableFields.length > 0 && (
-                        <Form.Group className="mb-3">
-                            <Form.Label>Campos recuperados da conexão</Form.Label>
-                            <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '220px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
-                                {availableFields.map((field) => (
-                                    <Form.Check
-                                        key={field}
-                                        type="checkbox"
-                                        id={`field-${field}`}
-                                        label={field}
-                                        checked={selectedFields.includes(field)}
-                                        onChange={() => handleFieldCheckboxChange(field)}
-                                        style={{ marginBottom: '8px' }}
-                                    />
-                                ))}
-                            </div>
-                            <Form.Text>
-                                Marque os campos que devem entrar na query da tela de pedidos. Somente os campos selecionados serão consultados na base externa.
-                            </Form.Text>
-                        </Form.Group>
+                        <>
+                            <Form.Group className="mb-3">
+                                <Form.Label>Campos recuperados da conexão</Form.Label>
+                                <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '220px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                    {availableFields.map((field) => (
+                                        <Form.Check
+                                            key={field}
+                                            type="checkbox"
+                                            id={`field-${field}`}
+                                            label={field}
+                                            checked={selectedFields.includes(field)}
+                                            onChange={() => handleFieldCheckboxChange(field)}
+                                            style={{ marginBottom: '8px' }}
+                                        />
+                                    ))}
+                                </div>
+                                <Form.Text>
+                                    Marque os campos que devem entrar na query da tela de pedidos. Somente os campos selecionados serão consultados na base externa.
+                                </Form.Text>
+                            </Form.Group>
+
+                            <Form.Group className="mb-3">
+                                <Form.Label>Coluna para Deduplicação (opcional)</Form.Label>
+                                <Form.Select 
+                                    value={formData.distinct_column || ''} 
+                                    onChange={(e) => setFormData({...formData, distinct_column: e.target.value || null})}
+                                >
+                                    <option value="">Nenhuma (não deduplica)</option>
+                                    {availableFields.map((field) => (
+                                        <option key={field} value={field}>{field}</option>
+                                    ))}
+                                </Form.Select>
+                                <Form.Text>
+                                    Selecione uma coluna para eliminar duplicatas. Por ex: se a coluna "pedido" se repete para cada item, selecionar "pedido" exibirá apenas uma linha por pedido único.
+                                </Form.Text>
+                            </Form.Group>
+
+                            <Form.Group className="mb-3">
+                                <Form.Label>Campos de Detalhes do Pedido (opcional)</Form.Label>
+                                <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '180px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                    {availableFields.map((field) => (
+                                        <Form.Check
+                                            key={`detail-${field}`}
+                                            type="checkbox"
+                                            id={`detail-${field}`}
+                                            label={field}
+                                            checked={formData.order_detail_fields.includes(field)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setFormData({...formData, order_detail_fields: [...formData.order_detail_fields, field]});
+                                                } else {
+                                                    setFormData({...formData, order_detail_fields: formData.order_detail_fields.filter(f => f !== field)});
+                                                }
+                                            }}
+                                            style={{ marginBottom: '8px' }}
+                                        />
+                                    ))}
+                                </div>
+                                <Form.Text>
+                                    Selecione os campos que contêm os detalhes principais do pedido (ex: número, cliente, data).
+                                </Form.Text>
+                            </Form.Group>
+
+                            <Form.Group className="mb-3">
+                                <Form.Label>Campos dos Itens/Produtos (opcional)</Form.Label>
+                                <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '180px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                    {availableFields.map((field) => (
+                                        <Form.Check
+                                            key={`item-${field}`}
+                                            type="checkbox"
+                                            id={`item-${field}`}
+                                            label={field}
+                                            checked={formData.order_item_fields.includes(field)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setFormData({...formData, order_item_fields: [...formData.order_item_fields, field]});
+                                                } else {
+                                                    setFormData({...formData, order_item_fields: formData.order_item_fields.filter(f => f !== field)});
+                                                }
+                                            }}
+                                            style={{ marginBottom: '8px' }}
+                                        />
+                                    ))}
+                                </div>
+                                <Form.Text>
+                                    Selecione os campos que contêm informações dos itens/produtos dentro do pedido (ex: código, descrição, quantidade, material).
+                                </Form.Text>
+                            </Form.Group>
+                        </>
                     )}
                 </Form>
             </Modal.Body>
@@ -661,6 +937,95 @@ export function ModalDatabaseConfig({ show, handleClose, refreshList, initialDat
                 </Button>
                 <Button variant="primary" onClick={saveConfig}>
                     Salvar
+                </Button>
+            </Modal.Footer>
+        </Modal>
+    );
+}
+
+export function ModalOrderDetails({ show, handleClose, orderData }) {
+    if (!orderData) return null;
+
+    const details = orderData._details && typeof orderData._details === 'object'
+        ? orderData._details
+        : (typeof orderData === 'object' ? orderData : {});
+    const items = Array.isArray(orderData._items) ? orderData._items : [];
+    const itemHeaders = items.length > 0 ? Object.keys(items[0]) : [];
+
+    return (
+        <Modal show={show} onHide={handleClose} size="lg">
+            <Modal.Header closeButton>
+                <Modal.Title>Detalhes do Pedido</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <div className="order-details">
+                    {typeof details === 'object' && details !== null ? (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{
+                                width: '100%',
+                                borderCollapse: 'collapse',
+                                fontSize: '0.9rem'
+                            }}>
+                                <tbody>
+                                    {Object.entries(details).map(([key, value]) => (
+                                        <tr key={key} style={{
+                                            borderBottom: '1px solid #ddd',
+                                            padding: '8px'
+                                        }}>
+                                            <td style={{
+                                                fontWeight: 'bold',
+                                                padding: '8px',
+                                                background: '#f5f5f5',
+                                                minWidth: '120px',
+                                                wordBreak: 'break-word'
+                                            }}>
+                                                {key}
+                                            </td>
+                                            <td style={{
+                                                padding: '8px',
+                                                wordBreak: 'break-word'
+                                            }}>
+                                                {value === null || value === undefined ? '—' : String(value)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {items.length > 0 && (
+                                <div style={{ marginTop: '16px' }}>
+                                    <h6 style={{ color: '#3f4d67', marginBottom: '8px' }}>Itens do Pedido</h6>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '2px solid #d0d5dd', textAlign: 'left' }}>
+                                                {itemHeaders.map((header) => (
+                                                    <th key={header} style={{ padding: '8px', color: '#3f4d67' }}>{header}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {items.map((item, index) => (
+                                                <tr key={`${index}-item`} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                                    {itemHeaders.map((header) => (
+                                                        <td key={`${index}-${header}`} style={{ padding: '8px' }}>
+                                                            {item?.[header] === null || item?.[header] === undefined ? '—' : String(item[header])}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <p>Nenhum dado disponível</p>
+                    )}
+                </div>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={handleClose}>
+                    Fechar
                 </Button>
             </Modal.Footer>
         </Modal>

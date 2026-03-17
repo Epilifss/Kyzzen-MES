@@ -7,6 +7,9 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
 import auth
 from typing import List, Optional
+import hashlib
+import json
+import datetime
 from urllib.parse import quote_plus
 
 # models.Base.metadata.drop_all(bind=engine)
@@ -94,6 +97,9 @@ def serialize_database_config(config: models.DatabaseConfig):
         "custom_query": connection_data.get("custom_query", ""),
         "has_password": bool(connection_data.get("password")),
         "selected_fields": connection_data.get("selected_fields", []),
+        "distinct_column": connection_data.get("distinct_column"),
+        "order_detail_fields": connection_data.get("order_detail_fields", []),
+        "order_item_fields": connection_data.get("order_item_fields", []),
         "created_at": config.created_at,
         "updated_at": config.updated_at,
     }
@@ -183,6 +189,106 @@ def validate_source_input(table_name: Optional[str], custom_query: Optional[str]
         raise HTTPException(status_code=400, detail="Informe uma tabela ou uma query personalizada")
 
 
+def _safe_str(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _compute_order_key(config_id: int, distinct_value: str):
+    raw = f"{config_id}:{distinct_value}".encode("utf-8")
+    return hashlib.sha1(raw).hexdigest()
+
+
+def _build_external_orders_payload(rows: List[dict], connection_data: dict, config_id: int):
+    selected_fields = connection_data.get("selected_fields", []) or []
+    detail_fields = connection_data.get("order_detail_fields", []) or []
+    item_fields = connection_data.get("order_item_fields", []) or []
+    distinct_column = connection_data.get("distinct_column")
+
+    if not selected_fields:
+        raise HTTPException(status_code=400, detail="Selecione ao menos um campo para a tela principal")
+
+    if not rows:
+        return []
+
+    available_fields = list(rows[0].keys())
+
+    if not distinct_column:
+        # fallback seguro para manter usabilidade quando a coluna ainda não foi configurada
+        distinct_column = selected_fields[0]
+
+    if distinct_column not in available_fields:
+        raise HTTPException(status_code=400, detail=f"A coluna de deduplicação '{distinct_column}' não existe na fonte")
+
+    detail_fields = [field for field in detail_fields if field in available_fields]
+    item_fields = [field for field in item_fields if field in available_fields]
+
+    grouped = {}
+    order_sequence = []
+
+    for row in rows:
+        distinct_value = _safe_str(row.get(distinct_column))
+        if not distinct_value:
+            continue
+
+        order_key = _compute_order_key(config_id, distinct_value)
+        if order_key not in grouped:
+            grouped[order_key] = {
+                "_order_key": order_key,
+                "_distinct_value": distinct_value,
+                "_details": {field: row.get(field) for field in detail_fields} if detail_fields else {field: row.get(field) for field in selected_fields},
+                "_items": [],
+                "_row": {field: row.get(field) for field in selected_fields},
+            }
+            order_sequence.append(order_key)
+
+        if item_fields:
+            grouped[order_key]["_items"].append({field: row.get(field) for field in item_fields})
+
+    payload_rows = []
+    for order_key in order_sequence:
+        order_data = grouped[order_key]
+        merged_row = {
+            **order_data["_row"],
+            "_order_key": order_data["_order_key"],
+            "_details": order_data["_details"],
+            "_items": order_data["_items"],
+        }
+        payload_rows.append(merged_row)
+
+    return payload_rows
+
+
+def _validate_external_orders(rows: List[dict]):
+    issues = []
+    valid_count = 0
+
+    for row in rows:
+        order_key = _safe_str(row.get("_order_key"))
+        if not order_key:
+            issues.append({"order_key": "", "reason": "Pedido sem identificador interno"})
+            continue
+
+        details = row.get("_details")
+        if details is not None and not isinstance(details, dict):
+            issues.append({"order_key": order_key, "reason": "Detalhes do pedido em formato inválido"})
+            continue
+
+        items = row.get("_items") or []
+        if items and not isinstance(items, list):
+            issues.append({"order_key": order_key, "reason": "Itens do pedido em formato inválido"})
+            continue
+
+        valid_count += 1
+
+    return {
+        "valid_count": valid_count,
+        "invalid_count": len(issues),
+        "issues": issues,
+    }
+
+
 @app.get("/configs/", response_model=list[schemas.DatabaseConfigOut])
 def get_configs(db: Session = Depends(get_db)):
     configs = db.query(models.DatabaseConfig).order_by(models.DatabaseConfig.name.asc()).all()
@@ -218,6 +324,9 @@ def create_config(config: schemas.DatabaseConfigCreate, db: Session = Depends(ge
             "table_name": (config.table_name or "").strip(),
             "custom_query": normalized_query,
             "selected_fields": getattr(config, "selected_fields", []),
+            "distinct_column": getattr(config, "distinct_column", None),
+            "order_detail_fields": getattr(config, "order_detail_fields", []),
+            "order_item_fields": getattr(config, "order_item_fields", []),
         },
     )
 
@@ -257,6 +366,9 @@ def update_config(config_id: int, config: schemas.DatabaseConfigUpdate, db: Sess
         "table_name": (config.table_name or "").strip(),
         "custom_query": normalized_query,
         "selected_fields": getattr(config, "selected_fields", []),
+        "distinct_column": getattr(config, "distinct_column", None),
+        "order_detail_fields": getattr(config, "order_detail_fields", []),
+        "order_item_fields": getattr(config, "order_item_fields", []),
     }
 
     db.commit()
@@ -322,8 +434,17 @@ def get_external_orders(db: Session = Depends(get_db)):
     validate_source_input(table_name_value, custom_query)
 
     selected_fields = connection_data.get("selected_fields", [])
+    detail_fields = connection_data.get("order_detail_fields", []) or []
+    item_fields = connection_data.get("order_item_fields", []) or []
+    distinct_column = connection_data.get("distinct_column")
+
     if not selected_fields:
         raise HTTPException(status_code=400, detail="Selecione ao menos um campo na configuração antes de carregar os pedidos")
+
+    all_requested_fields = []
+    for field in selected_fields + detail_fields + item_fields + ([distinct_column] if distinct_column else []):
+        if field and field not in all_requested_fields:
+            all_requested_fields.append(field)
 
     normalized_type = normalize_db_type(connection_data.get("db_type", "postgresql"))
     password = connection_data.get("password", "")
@@ -347,7 +468,7 @@ def get_external_orders(db: Session = Depends(get_db)):
                 all_rows = [dict(row._mapping) for row in result]
                 available_fields = list(result.keys())
 
-            query_fields = [field for field in selected_fields if field in available_fields]
+            query_fields = [field for field in all_requested_fields if field in available_fields]
             if not query_fields:
                 raise HTTPException(status_code=404, detail="Os campos selecionados não existem no resultado da query personalizada")
 
@@ -358,7 +479,7 @@ def get_external_orders(db: Session = Depends(get_db)):
             external_table = Table(table_name, metadata, autoload_with=external_engine, schema=schema_name)
 
             available_columns = {column.name: column for column in external_table.columns}
-            query_columns = [available_columns[field] for field in selected_fields if field in available_columns]
+            query_columns = [available_columns[field] for field in all_requested_fields if field in available_columns]
             if not query_columns:
                 raise HTTPException(status_code=404, detail="Os campos selecionados não existem mais na tabela configurada")
 
@@ -369,11 +490,13 @@ def get_external_orders(db: Session = Depends(get_db)):
 
             query_fields = [column.name for column in query_columns]
 
+        enriched_rows = _build_external_orders_payload(rows, connection_data, active_config.id)
+
         return jsonable_encoder({
             "config_id": active_config.id,
             "config_name": active_config.name,
-            "fields": query_fields,
-            "rows": rows,
+            "fields": [field for field in selected_fields if field in query_fields],
+            "rows": enriched_rows,
         })
     except HTTPException:
         raise
@@ -382,6 +505,128 @@ def get_external_orders(db: Session = Depends(get_db)):
     finally:
         if external_engine is not None:
             external_engine.dispose()
+
+
+@app.post("/orders/external/validate", response_model=schemas.ExternalOrdersValidationResponse)
+def validate_external_orders(payload: schemas.ImportOrdersRequest, db: Session = Depends(get_db)):
+    config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == payload.config_id).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+
+    validation_result = _validate_external_orders(payload.orders or [])
+    return validation_result
+
+
+@app.post("/orders/import/", response_model=schemas.ImportOrdersResponse)
+def import_orders(request: schemas.ImportOrdersRequest, db: Session = Depends(get_db)):
+    """Importar pedidos selecionados do externo para o banco interno"""
+    config = db.query(models.DatabaseConfig).filter(models.DatabaseConfig.id == request.config_id).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+
+    validation_result = _validate_external_orders(request.orders or [])
+
+    imported_count = 0
+    skipped_count = 0
+
+    for order in request.orders or []:
+        order_key = _safe_str(order.get("_order_key"))
+        if not order_key:
+            continue
+
+        existing = db.query(models.ImportedOrder).filter(
+            models.ImportedOrder.external_id == order_key,
+            models.ImportedOrder.config_id == request.config_id,
+        ).first()
+
+        if existing:
+            skipped_count += 1
+            continue
+
+        new_order = models.ImportedOrder(
+            external_id=order_key,
+            config_id=request.config_id,
+            order_data=order.get("_details") or {},
+            order_items=order.get("_items") or [],
+            import_status="pending",
+        )
+        db.add(new_order)
+        imported_count += 1
+
+    db.commit()
+
+    return {
+        "imported_count": imported_count,
+        "skipped_count": skipped_count,
+        "invalid_count": validation_result["invalid_count"],
+        "detail": f"{imported_count} pedidos importados, {skipped_count} ignorados (já existentes), {validation_result['invalid_count']} inválidos.",
+    }
+
+
+@app.get("/orders/imported/", response_model=list[schemas.ImportedOrderOut])
+def list_imported_orders(db: Session = Depends(get_db)):
+    """Listar pedidos que foram importados"""
+    return db.query(models.ImportedOrder).order_by(models.ImportedOrder.created_at.desc()).all()
+
+
+@app.get("/orders/imported/{order_id}", response_model=schemas.ImportedOrderOut)
+def get_imported_order(order_id: int, db: Session = Depends(get_db)):
+    """Obter detalhes de um pedido importado específico"""
+    order = db.query(models.ImportedOrder).filter(models.ImportedOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido importado não encontrado")
+    return order
+
+
+@app.post("/orders/imported/{order_id}/queue-production", response_model=schemas.ImportedOrderOut)
+def queue_order_for_production(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.ImportedOrder).filter(models.ImportedOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido importado não encontrado")
+
+    order.import_status = "processing"
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+@app.post("/orders/imported/{order_id}/complete", response_model=schemas.ImportedOrderOut)
+def complete_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.ImportedOrder).filter(models.ImportedOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido importado não encontrado")
+
+    order.import_status = "completed"
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+@app.get("/orders/reports/summary", response_model=schemas.OrdersReportSummary)
+def orders_report_summary(db: Session = Depends(get_db)):
+    total = db.query(func.count(models.ImportedOrder.id)).scalar() or 0
+    pending = db.query(func.count(models.ImportedOrder.id)).filter(models.ImportedOrder.import_status == "pending").scalar() or 0
+    processing = db.query(func.count(models.ImportedOrder.id)).filter(models.ImportedOrder.import_status == "processing").scalar() or 0
+    completed = db.query(func.count(models.ImportedOrder.id)).filter(models.ImportedOrder.import_status == "completed").scalar() or 0
+    error = db.query(func.count(models.ImportedOrder.id)).filter(models.ImportedOrder.import_status == "error").scalar() or 0
+
+    today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_imported = (
+        db.query(func.count(models.ImportedOrder.id))
+        .filter(models.ImportedOrder.created_at >= today_start)
+        .scalar()
+        or 0
+    )
+
+    return {
+        "total_imported": total,
+        "pending": pending,
+        "processing": processing,
+        "completed": completed,
+        "error": error,
+        "today_imported": today_imported,
+    }
+
 
 # --- ROTAS DE FUNÇÕES (ROLES) ---
 
@@ -589,15 +834,57 @@ def get_departments(db: Session = Depends(get_db)):
 
 @app.post("/products/", response_model=schemas.ProductOut)
 def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)):
-    db_product = db.query(models.Product).filter(models.Product.sku == product.sku).first()
-    if db_product:
-        raise HTTPException(status_code=400, detail="SKU já cadastrado")
-    
-    new_product = models.Product(**product.model_dump())
+    if db.query(models.Product).filter(models.Product.cod == product.cod).first():
+        raise HTTPException(status_code=400, detail="cod product already registered")
+
+    new_product = models.Product(
+        cod=product.cod,
+        desc=product.desc,
+        line=product.line,
+        base_points=product.base_points,
+        product_data={}
+    )
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
-    return new_product
+
+    return {
+        "id": new_product.id,
+        "cod": new_product.cod,
+        "desc": new_product.desc,
+        "line": new_product.line,
+        "base_points": new_product.base_points,
+        "product_data": new_product.product_data
+    }
+
+@app.put("/products/{product_id}", response_model=schemas.ProductOut)
+def update_product(product_id: int, product: schemas.ProductUpdate, db: Session = Depends(get_db)):
+    db_products = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_products:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    existing = (
+        db.query(models.Product)
+        .filter(models.Product.cod == product.cod, models.Product.id != product_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="cod product already registered")
+
+    db_products.cod = product.cod
+    db_products.desc = product.desc
+    db_products.line = product.line
+    db_products.base_points = product.base_points
+
+    db.commit()
+    db.refresh(db_products)
+    return {
+        "id": db_products.id,
+        "cod": db_products.cod,
+        "desc": db_products.desc,
+        "line": db_products.line,
+        "base_points": db_products.base_points
+    }
 
 @app.get("/products/", response_model=List[schemas.ProductOut])
 def list_products(db: Session = Depends(get_db)):

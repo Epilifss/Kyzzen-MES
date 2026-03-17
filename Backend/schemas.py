@@ -16,12 +16,18 @@ class DatabaseConfigCreate(DatabaseConfigPayloadBase):
     name: str
     password: str
     selected_fields: List[str] = []
+    distinct_column: Optional[str] = None
+    order_detail_fields: List[str] = []
+    order_item_fields: List[str] = []
 
 
 class DatabaseConfigUpdate(DatabaseConfigPayloadBase):
     name: str
     password: Optional[str] = None
     selected_fields: List[str] = []
+    distinct_column: Optional[str] = None
+    order_detail_fields: List[str] = []
+    order_item_fields: List[str] = []
 
 
 class DatabaseConfigOut(DatabaseConfigPayloadBase):
@@ -29,6 +35,9 @@ class DatabaseConfigOut(DatabaseConfigPayloadBase):
     name: str
     has_password: bool
     selected_fields: List[str] = []
+    distinct_column: Optional[str] = None
+    order_detail_fields: List[str] = []
+    order_item_fields: List[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -50,6 +59,60 @@ class ExternalOrdersResponse(BaseModel):
     config_name: str
     fields: List[str]
     rows: List[dict]
+
+
+class ExternalOrdersValidationIssue(BaseModel):
+    order_key: str
+    reason: str
+
+
+class ExternalOrdersValidationResponse(BaseModel):
+    valid_count: int
+    invalid_count: int
+    issues: List[ExternalOrdersValidationIssue]
+
+
+class ImportedOrderIn(BaseModel):
+    external_id: str
+    config_id: int
+    order_data: dict
+    order_items: Optional[List[dict]] = None
+
+class ImportedOrderOut(BaseModel):
+    id: int
+    external_id: str
+    config_id: int
+    order_data: dict
+    order_items: Optional[List[dict]] = None
+    import_status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ImportOrdersRequest(BaseModel):
+    config_id: int
+    orders: List[dict]
+
+
+class ImportOrdersResponse(BaseModel):
+    imported_count: int
+    skipped_count: int
+    invalid_count: int
+    detail: str
+
+
+class ImportedOrderStatusUpdate(BaseModel):
+    import_status: str
+
+
+class OrdersReportSummary(BaseModel):
+    total_imported: int
+    pending: int
+    processing: int
+    completed: int
+    error: int
+    today_imported: int
 
 # Esquemas de Funções (Roles)
 class RoleCreate(BaseModel):
@@ -108,15 +171,24 @@ class UserOut(BaseModel):
 
 # Esquema para criar um Produto
 class ProductCreate(BaseModel):
-    sku: str
-    name: str
+    cod: str
+    desc: str
+    line: str
+    base_points: int
+    product_data: Optional[dict] = None
+    
+class ProductUpdate(BaseModel):
+    cod: str
+    desc: str
+    line: str
     base_points: int
 
 # Esquema para retorno de Produto
 class ProductOut(BaseModel):
     id: int
-    sku: str
-    name: str
+    cod: str
+    desc: str
+    line: str
     base_points: int
 
     class Config:
