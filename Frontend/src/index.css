@@ -200,6 +200,112 @@ button:focus-visible {
   gap: 0.5rem;
 }
 
+.registrations-page {
+  position: relative;
+}
+
+.registrations-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 280px at 0% -8%, rgba(63, 77, 103, 0.1), transparent 70%),
+    radial-gradient(760px 240px at 100% 0%, rgba(37, 99, 235, 0.08), transparent 70%);
+}
+
+.registrations-hero {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 1rem;
+}
+
+.registrations-subtitle {
+  margin: 0;
+  max-width: 760px;
+  font-size: 0.98rem;
+}
+
+.registrations-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.registration-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.registration-card {
+  height: 100%;
+  min-height: 150px;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: linear-gradient(165deg, #ffffff 0%, #f7f9fc 100%);
+  box-shadow: 0 6px 18px rgba(27, 39, 58, 0.07);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.7rem 0.85rem;
+  align-items: start;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.registration-card-link:hover .registration-card,
+.registration-card-link:focus-visible .registration-card {
+  transform: translateY(-3px);
+  border-color: #9fb0cf;
+  box-shadow: 0 12px 26px rgba(26, 45, 78, 0.15);
+}
+
+.registration-card-link:focus-visible {
+  outline: none;
+}
+
+.registration-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #3f4d67 0%, #51648a 100%);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.registration-card-body h3 {
+  margin: 0;
+  color: #243246;
+  font-size: 1.05rem;
+}
+
+.registration-card-body p {
+  margin: 0.35rem 0 0;
+  color: #5a677c;
+  font-size: 0.93rem;
+  line-height: 1.4;
+}
+
+.registration-card-cta {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 0.15rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background-color: #ecf1f8;
+  color: #3f4d67;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -353,6 +459,21 @@ button:focus-visible {
   color: #1e40af;
 }
 
+.status-badge.status-queued {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.status-badge.status-assigned {
+  background-color: #fde68a;
+  color: #92400e;
+}
+
+.status-badge.status-in_progress {
+  background-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
 .status-badge.status-completed {
   background-color: #dcfce7;
   color: #166534;
@@ -404,6 +525,10 @@ button:focus-visible {
   .intro-text {
     max-width: none;
   }
+
+  .registrations-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 767px) {
@@ -432,5 +557,9 @@ button:focus-visible {
   .modal-body {
     max-height: 70vh;
     overflow-y: auto;
+  }
+
+  .registration-card {
+    min-height: 138px;
   }
 }

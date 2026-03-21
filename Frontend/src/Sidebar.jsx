@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Settings, Group, LogOut, BookPlus, FolderPlus, ShieldCheck } from 'lucide-react';
+import { Home, Users, Settings, Group, LogOut, BookPlus, FolderPlus, ShieldCheck, Factory, IdCard } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import './Sidebar.css';
 
@@ -43,6 +43,22 @@ const Sidebar = () => {
               <div className="menu-item">
                 <BookPlus size={20} />
                 <span>Pedidos</span>
+              </div>
+            </NavLink>
+          )}
+          {can('sector_tasks') && (
+            <NavLink to="/sector-tasks" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+              <div className="menu-item">
+                <Factory size={20} />
+                <span>Fila do Setor</span>
+              </div>
+            </NavLink>
+          )}
+          {can('operator_panel') && (
+            <NavLink to="/operator-panel" className={({ isActive }) => (isActive ? 'menu-link active-link' : 'menu-link')}>
+              <div className="menu-item">
+                <IdCard size={20} />
+                <span>Painel Operador</span>
               </div>
             </NavLink>
           )}

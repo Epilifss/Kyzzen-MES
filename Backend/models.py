@@ -50,6 +50,7 @@ class MaterialTypes(Base):
     __tablename__= "material_types"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
+    workstation_id = Column(Integer, ForeignKey("workstations.id"), nullable=True)
 
 class MaterialStock(Base):
     __tablename__= "material_stock"
@@ -63,7 +64,9 @@ class Component(Base):
     id = Column(Integer, primary_key=True, index=True)
     cod = Column(String, unique=True, index=True)
     desc = Column(String)
-    material_id = Column(JSONB)
+    line = Column(String)
+    material_id = Column(Integer, index=True, nullable=True)
+    base_points = Column(Integer, default=0)
     current_stock = Column(Float, default=0)
     min_stock = Column(Float, default=0)
 
@@ -113,3 +116,33 @@ class ProductionLog(Base):
     quantity = Column(Float)
     status = Column(String, default="Em produção.") # "pending" ou "finished"
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class ProductionTask(Base):
+    __tablename__ = "production_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    imported_order_id = Column(Integer, ForeignKey("imported_orders.id"), nullable=False, index=True)
+    external_order_id = Column(String, index=True, nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    component_id = Column(Integer, ForeignKey("components.id"), nullable=True, index=True)
+    workstation_id = Column(Integer, ForeignKey("workstations.id"), nullable=False, index=True)
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    quantity = Column(Float, default=1)
+    status = Column(String, default="queued", index=True)
+    source_item = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
+
+class MaterialRequisition(Base):
+    __tablename__ = "material_requisitions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("production_tasks.id"), nullable=False, index=True)
+    requested_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    quantity = Column(Float, default=0)
+    notes = Column(String, nullable=True)
+    status = Column(String, default="pending", index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

@@ -6,11 +6,14 @@ import Dashboard from './Dashboard';
 import Users from './Users';
 import Orders from './Orders';
 import Registrations from './registrations';
+import Components from './components';
 import Products from './Products';
 import Workstations from './Workstations';
 import Sidebar from './Sidebar';
 import Configs from './Configs';
 import Roles from './Roles';
+import SectorTasks from './SectorTasks';
+import OperatorPanel from './OperatorPanel';
 
 // Função para proteger as rotas
 const PrivateRoute = ({ children }) => {
@@ -70,6 +73,17 @@ function App() {
         />
 
         <Route
+          path="/components"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Components />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/registrations"
           element={
             <PrivateRoute>
@@ -119,6 +133,28 @@ function App() {
             <PrivateRoute>
               <MainLayout>
                 <Roles />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/sector-tasks"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <SectorTasks />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/operator-panel"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <OperatorPanel />
               </MainLayout>
             </PrivateRoute>
           }

@@ -28,9 +28,12 @@ const resetDatabaseConfigForm = (setFormData, initialValue = null) => {
 export const ALL_PERMISSIONS = [
     { key: 'dashboard', label: 'Início (Dashboard)' },
     { key: 'orders', label: 'Pedidos' },
+    { key: 'pcp_release', label: 'PCP: liberar produção' },
     { key: 'registrations', label: 'Cadastros' },
     { key: 'users', label: 'Usuários' },
     { key: 'workstations', label: 'Setores' },
+    { key: 'sector_tasks', label: 'Chefia: fila do setor' },
+    { key: 'operator_panel', label: 'Operador: painel de produção' },
     { key: 'configs', label: 'Configurações de Banco' },
     { key: 'roles', label: 'Funções (Perfis)' },
 ];
@@ -105,10 +108,24 @@ export function ModalRole({ show, handleClose, initialData = null, onSaved }) {
 
 export function ModalMaterial({ show, handleClose, initialData = null, onSaved }) {
     const [name, setName] = useState('');
+    const [workstationId, setWorkstationId] = useState('');
+    const [workstations, setWorkstations] = useState([]);
+
+    const fetchWorkstations = async () => {
+        try {
+            const response = await api.get('/workstations/');
+            setWorkstations(response.data || []);
+        } catch (error) {
+            console.error('Erro ao buscar setores para material:', error);
+            setWorkstations([]);
+        }
+    };
 
     useEffect(() => {
         if (show) {
             setName(initialData?.name ?? '');
+            setWorkstationId(initialData?.workstation_id ? String(initialData.workstation_id) : '');
+            fetchWorkstations();
         }
     }, [show, initialData]);
 
@@ -116,10 +133,14 @@ export function ModalMaterial({ show, handleClose, initialData = null, onSaved }
         if (!name.trim()) { alert('Informe o nome do material.'); return; }
         try {
             let response;
+            const payload = {
+                name: name.trim(),
+                workstation_id: workstationId ? parseInt(workstationId, 10) : null,
+            };
             if (initialData?.id) {
-                response = await api.put(`/material_types/${initialData.id}`, { name: name.trim() });
+                response = await api.put(`/material_types/${initialData.id}`, payload);
             } else {
-                response = await api.post('/material_types/', { name: name });
+                response = await api.post('/material_types/', payload);
             }
             if (response.status === 200 || response.status === 201) {
                 onSaved?.(response.data);
@@ -140,6 +161,17 @@ export function ModalMaterial({ show, handleClose, initialData = null, onSaved }
                     <Form.Group className="mb-3">
                         <Form.Label>Nome do Material</Form.Label>
                         <Form.Control value={name} onChange={e => setName(e.target.value)} autoFocus />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Setor responsável</Form.Label>
+                        <Form.Select value={workstationId} onChange={(e) => setWorkstationId(e.target.value)}>
+                            <option value="">Selecione (opcional)</option>
+                            {workstations.map((workstation) => (
+                                <option key={workstation.id} value={workstation.id}>
+                                    {workstation.name}
+                                </option>
+                            ))}
+                        </Form.Select>
                     </Form.Group>
                 </Form>
             </Modal.Body>
@@ -336,13 +368,13 @@ export function ModalNewUser({ show, handleClose, refreshList, initialData = nul
     );
 }
 
-export function ModalNewProduct({ show, handleClose, refreshList, initialData = null, onSaved }) {
+export function ModalNewComponent({ show, handleClose, refreshList, initialData = null, onSaved }) {
 
     const [cod, setCod] = useState('');
     const [desc, setDesc] = useState('');
     const [line, setLine] = useState('');
-    const [base_points, setPoints] = useState('');
     const [materialIds, setMaterialIds] = useState([]);
+    const [base_points, setPoints] = useState('');
     const [materialList, setMaterialList] = useState([]);
     const [showMaterialModal, setShowMaterialModal] = useState(false);
 
@@ -350,8 +382,8 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
         setCod('');
         setDesc('');
         setLine('');
-        setPoints('');
         setMaterialIds([]);
+        setPoints('');
     };
 
     const fetchMaterialTypes = async () => {
@@ -377,13 +409,252 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
             setDesc(initialData.desc ?? '');
             setLine(initialData.line ?? '');
             setPoints(initialData.base_points ?? '');
-            const selected = initialData.product_data?.material_type_ids || [];
-            setMaterialIds(Array.isArray(selected) ? selected.map((id) => String(id)) : []);
+            if (initialData.material_id !== null && initialData.material_id !== undefined) {
+                setMaterialIds([String(initialData.material_id)]);
+            } else {
+                setMaterialIds([]);
+            }
             return;
         }
 
         reset();
     }, [show, initialData?.id]);
+
+    const save = async () => {
+        const isEditing = Boolean(initialData?.id);
+
+        if (!cod || !desc || !line) {
+            alert('Código, descrição e linha são obrigatórios.');
+            return;
+        }
+
+        const pointsValue = parseInt(base_points, 10);
+        if (Number.isNaN(pointsValue)) {
+            alert('Informe um valor numérico válido em pontos.');
+            return;
+        }
+
+        try {
+            const selectedMaterialIds = materialIds.map((id) => parseInt(id, 10)).filter((id) => !Number.isNaN(id));
+            if (selectedMaterialIds.length === 0) {
+                alert('Selecione ao menos um tipo de material.');
+                return;
+            }
+
+            const materialId = selectedMaterialIds[0];
+
+            let response;
+            if (isEditing) {
+                response = await api.put(`/components/${initialData.id}`, {
+                    cod: cod,
+                    desc: desc,
+                    line: line,
+                    base_points: pointsValue,
+                    material_id: materialId,
+                    // workstation_id: workstation ? parseInt(workstation, 10) : 0,
+                    // role_id: roleId ? parseInt(roleId, 10) : null,
+                });
+            } else {
+                response = await api.post(`/components/`, {
+                    cod,
+                    desc,
+                    line,
+                    base_points: pointsValue,
+                    material_id: materialId,
+                    // workstation_id: workstation ? parseInt(workstation, 10) : 0,
+                    // role_id: roleId ? parseInt(roleId, 10) : null,
+                });
+            }
+            if (response.status === 200 || response.status === 201) {
+                await refreshList?.();
+                onSaved?.(response.data);
+                handleClose();
+                reset();
+            }
+        } catch (error) {
+            const detail = error?.response?.data?.detail;
+            const detailText = Array.isArray(detail)
+                ? detail.map((item) => item?.msg || JSON.stringify(item)).join(' | ')
+                : detail;
+            alert('Erro ao tentar salvar componente: ' + (detailText || error?.message || 'erro desconhecido'));
+        }
+    };
+
+    return (
+        <>
+            <Modal show={show} onHide={handleClose}>
+                <Modal.Header closeButton>
+                    <Modal.Title>{initialData?.id ? 'Editar Componente' : 'Novo Componente'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Código</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={cod}
+                                onChange={(e) => setCod(e.target.value)}
+                                autoFocus
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Descrição</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={desc}
+                                onChange={(e) => setDesc(e.target.value)}
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Linha</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={line}
+                                onChange={(e) => setLine(e.target.value)}
+                            />
+                        </Form.Group>
+                        <Form.Group>
+                            <Form.Label>Tipos de materiais (marque um ou mais)</Form.Label>
+                            <Button
+                                    size="sm"
+                                    variant="outline-primary"
+                                    onClick={() => setShowMaterialModal(true)}
+                                    title="Criar novo material"
+                                    style={{ lineHeight: 1, padding: '0 6px' }}
+                                >+</Button>
+                            <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '220px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                {materialList.length === 0 && (
+                                    <div style={{ color: '#5f6c81', fontSize: '14px' }}>Nenhum tipo de material cadastrado.</div>
+                                )}
+                                {materialList.map((material) => (
+                                    <Form.Check
+                                        key={material.id}
+                                        type="checkbox"
+                                        id={`product-material-${material.id}`}
+                                        label={material.name}
+                                        checked={materialIds.includes(String(material.id))}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setMaterialIds((current) => [...current, String(material.id)]);
+                                            } else {
+                                                setMaterialIds((current) => current.filter((id) => id !== String(material.id)));
+                                            }
+                                        }}
+                                        style={{ marginBottom: '8px' }}
+                                    />
+                                ))}
+                            </div>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Pontos</Form.Label>
+                            <Form.Control
+                                type="number"
+                                value={base_points}
+                                onChange={(e) => setPoints(e.target.value)}
+                            />
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => { reset(); handleClose(); }} style={{ backgroundColor: 'red' }}>
+                        Cancelar
+                    </Button>
+                    <Button variant="primary" onClick={save}>
+                        Salvar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+            <ModalMaterial
+                show={showMaterialModal}
+                handleClose={() => setShowMaterialModal(false)}
+                onSaved={fetchMaterialTypes}
+            />
+        </>
+    );
+}
+
+export function ModalNewProduct({ show, handleClose, refreshList, initialData = null, onSaved }) {
+
+    const [cod, setCod] = useState('');
+    const [desc, setDesc] = useState('');
+    const [line, setLine] = useState('');
+    const [base_points, setPoints] = useState('');
+    const [materialIds, setMaterialIds] = useState([]);
+    const [materialList, setMaterialList] = useState([]);
+    const [componentIds, setComponentIds] = useState([]);
+    const [componentsList, setComponentsList] = useState([]);
+    const [showMaterialModal, setShowMaterialModal] = useState(false);
+
+    const reset = () => {
+        setCod('');
+        setDesc('');
+        setLine('');
+        setPoints('');
+        setMaterialIds([]);
+        setComponentIds([]);
+    };
+
+    const fetchMaterialTypes = async () => {
+        try {
+            const response = await api.get('/material_types/');
+            setMaterialList(response.data || []);
+        } catch (error) {
+            console.error("Erro ao buscar tipo de materiais:", error);
+            setMaterialList([]);
+        }
+    };
+
+    const fetchComponents = async () => {
+        try {
+            const response = await api.get('/components/');
+            setComponentsList(response.data || []);
+        } catch (error) {
+            console.error("Erro ao buscar componentes:", error);
+            setComponentsList([]);
+        }
+    };
+
+    useEffect(() => {
+        if (!show) {
+            reset();
+            return;
+        }
+
+        fetchMaterialTypes();
+        fetchComponents();
+
+        if (initialData?.id) {
+            setCod(initialData.cod ?? '');
+            setDesc(initialData.desc ?? '');
+            setLine(initialData.line ?? '');
+            setPoints(initialData.base_points ?? '');
+            const selected = initialData.product_data?.material_type_ids || [];
+            setMaterialIds(Array.isArray(selected) ? selected.map((id) => String(id)) : []);
+            const selectedComponents = initialData.product_data?.component_ids || [];
+            setComponentIds(Array.isArray(selectedComponents) ? selectedComponents.map((id) => String(id)) : []);
+            return;
+        }
+
+        reset();
+    }, [show, initialData?.id]);
+
+    useEffect(() => {
+        if (materialIds.length === 0) {
+            setComponentIds([]);
+            return;
+        }
+
+        const selectedMaterialIds = materialIds
+            .map((id) => parseInt(id, 10))
+            .filter((id) => !Number.isNaN(id));
+
+        setComponentIds((current) =>
+            current.filter((componentId) => {
+                const component = componentsList.find((item) => String(item.id) === String(componentId));
+                return component && selectedMaterialIds.includes(component.material_id);
+            })
+        );
+    }, [materialIds, componentsList]);
 
     const save = async () => {
         if (!cod || !desc || !line) {
@@ -403,9 +674,30 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
                 .filter((material) => selectedMaterialIds.includes(material.id))
                 .map((material) => material.name);
 
+            const selectedComponentIds = componentIds.map((id) => parseInt(id, 10)).filter((id) => !Number.isNaN(id));
+            const selectedComponents = componentsList.filter((component) => selectedComponentIds.includes(component.id));
+            const selectedComponentNames = selectedComponents.map((component) => component.desc);
+
+            const compositionByMaterial = selectedComponents.reduce((acc, component) => {
+                const material = materialList.find((item) => item.id === component.material_id);
+                const key = material?.name || `material_${component.material_id}`;
+                if (!acc[key]) {
+                    acc[key] = [];
+                }
+                acc[key].push({
+                    id: component.id,
+                    cod: component.cod,
+                    desc: component.desc,
+                });
+                return acc;
+            }, {});
+
             const productData = {
                 material_type_ids: selectedMaterialIds,
                 material_type_names: selectedMaterialNames,
+                component_ids: selectedComponentIds,
+                component_names: selectedComponentNames,
+                composition_by_material: compositionByMaterial,
             };
 
             let response;
@@ -512,6 +804,43 @@ export function ModalNewProduct({ show, handleClose, refreshList, initialData = 
                                         style={{ marginBottom: '8px' }}
                                     />
                                 ))}
+                            </div>
+                        </Form.Group>
+
+                        <Form.Group className="mt-3">
+                            <Form.Label>Composição do produto (componentes)</Form.Label>
+                            <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '12px', maxHeight: '220px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                {materialIds.length === 0 && (
+                                    <div style={{ color: '#5f6c81', fontSize: '14px' }}>Selecione ao menos um tipo de material para escolher os componentes.</div>
+                                )}
+
+                                {materialIds.length > 0 && componentsList
+                                    .filter((component) => materialIds.includes(String(component.material_id)))
+                                    .map((component) => {
+                                        const materialName = materialList.find((item) => item.id === component.material_id)?.name || 'Material não encontrado';
+
+                                        return (
+                                            <Form.Check
+                                                key={component.id}
+                                                type="checkbox"
+                                                id={`product-component-${component.id}`}
+                                                label={`${component.cod} - ${component.desc} (${materialName})`}
+                                                checked={componentIds.includes(String(component.id))}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setComponentIds((current) => [...current, String(component.id)]);
+                                                    } else {
+                                                        setComponentIds((current) => current.filter((id) => id !== String(component.id)));
+                                                    }
+                                                }}
+                                                style={{ marginBottom: '8px' }}
+                                            />
+                                        );
+                                    })}
+
+                                {materialIds.length > 0 && componentsList.filter((component) => materialIds.includes(String(component.material_id))).length === 0 && (
+                                    <div style={{ color: '#5f6c81', fontSize: '14px' }}>Nenhum componente cadastrado para os materiais selecionados.</div>
+                                )}
                             </div>
                         </Form.Group>
                     </Form>

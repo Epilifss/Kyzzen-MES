@@ -17,6 +17,8 @@ function Orders() {
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
     const [report, setReport] = useState(null);
+    const permissions = JSON.parse(localStorage.getItem('permissions') || '[]');
+    const canRelease = permissions.includes('pcp_release') || permissions.includes('orders');
 
     useEffect(() => {
         fetchExternalOrders();
@@ -132,6 +134,17 @@ function Orders() {
             await fetchReport();
         } catch (error) {
             alert(error.response?.data?.detail || "Erro ao concluir pedido");
+        }
+    };
+
+    const releaseOrderForProduction = async (orderId) => {
+        try {
+            const response = await api.post(`./orders/imported/${orderId}/release-production`);
+            alert(response.data?.detail || 'Pedido liberado para produção');
+            await fetchImportedOrders();
+            await fetchReport();
+        } catch (error) {
+            alert(error.response?.data?.detail || 'Erro ao liberar pedido para produção');
         }
     };
 
@@ -308,6 +321,11 @@ function Orders() {
                                                 {order.import_status !== 'processing' && order.import_status !== 'completed' && (
                                                     <button className="outline-btn" onClick={() => moveToProduction(order.id)}>
                                                         Produção
+                                                    </button>
+                                                )}
+                                                {canRelease && order.import_status !== 'completed' && (
+                                                    <button className="outline-btn" onClick={() => releaseOrderForProduction(order.id)}>
+                                                        Liberar PCP
                                                     </button>
                                                 )}
                                                 {order.import_status === 'processing' && (

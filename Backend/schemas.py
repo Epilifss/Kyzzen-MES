@@ -214,13 +214,106 @@ class ProductOut(BaseModel):
     class Config:
         from_attributes = True
 
+class ComponentsOut(BaseModel):
+    id: int
+    cod: str
+    desc: str
+    line: str
+    material_id: Optional[int] = None
+    base_points: int
+    product_data: Optional[dict] = None
+
+    class Config:
+        from_attributes = True
+
+class ComponentCreate(BaseModel):
+    cod: str
+    desc: str
+    line: str
+    material_id: int
+    base_points: int
+    product_data: Optional[dict] = None
+
+
+class ComponentUpdate(BaseModel):
+    cod: str
+    desc: str
+    line: str
+    material_id: int
+    base_points: int
+    product_data: Optional[dict] = None
+
 
 class MaterialTypeCreate(BaseModel):
     name: str
+    workstation_id: Optional[int] = None
+
+
+class MaterialTypeUpdate(BaseModel):
+    name: str
+    workstation_id: Optional[int] = None
 
 class MaterialTypeOut(BaseModel):
     id: int
     name: str
+    workstation_id: Optional[int] = None
+
+
+class ReleaseOrderForProductionResponse(BaseModel):
+    imported_order_id: int
+    created_tasks: int
+    detail: str
+
+
+class ProductionTaskOut(BaseModel):
+    id: int
+    imported_order_id: int
+    external_order_id: str
+    product_id: int
+    component_id: Optional[int] = None
+    workstation_id: int
+    assigned_user_id: Optional[int] = None
+    quantity: float
+    status: str
+    source_item: Optional[dict] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AssignProductionTaskPayload(BaseModel):
+    user_id: int
+
+
+class StartProductionTaskPayload(BaseModel):
+    user_id: int
+
+
+class FinishProductionTaskPayload(BaseModel):
+    user_id: Optional[int] = None
+
+
+class MaterialRequisitionCreate(BaseModel):
+    task_id: int
+    requested_by_user_id: int
+    quantity: float
+    notes: Optional[str] = None
+
+
+class MaterialRequisitionOut(BaseModel):
+    id: int
+    task_id: int
+    requested_by_user_id: int
+    quantity: float
+    notes: Optional[str] = None
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 # Esquema para registrar produção (O que o operador envia)
 

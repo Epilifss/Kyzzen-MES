@@ -17,8 +17,18 @@ function Login() {
       const permissions = response.data.permissions || [];
       localStorage.setItem('permissions', JSON.stringify(permissions));
 
-      const ORDERED_ROUTES = ['dashboard', 'orders', 'users', 'workstations', 'configs', 'roles'];
-      const firstRoute = ORDERED_ROUTES.find(r => permissions.includes(r)) ?? 'dashboard';
+      const ORDERED_ROUTES = [
+        { permission: 'dashboard', route: 'dashboard' },
+        { permission: 'orders', route: 'orders' },
+        { permission: 'sector_tasks', route: 'sector-tasks' },
+        { permission: 'operator_panel', route: 'operator-panel' },
+        { permission: 'registrations', route: 'registrations' },
+        { permission: 'users', route: 'users' },
+        { permission: 'workstations', route: 'workstations' },
+        { permission: 'configs', route: 'configs' },
+        { permission: 'roles', route: 'roles' },
+      ];
+      const firstRoute = ORDERED_ROUTES.find((item) => permissions.includes(item.permission))?.route ?? 'dashboard';
       window.location.href = `/${firstRoute}`;
     } catch (error) {
       alert('Falha no login: ' + error.response?.data?.detail);

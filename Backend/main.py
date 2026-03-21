@@ -6,7 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
 import auth
-from typing import List, Optional
+from typing import List, Optional, Any
 import hashlib
 import json
 import datetime
@@ -19,6 +19,9 @@ models.Base.metadata.create_all(bind=engine)
 with engine.connect() as _conn:
     _conn.execute(text(
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL"
+    ))
+    _conn.execute(text(
+        "ALTER TABLE material_types ADD COLUMN IF NOT EXISTS workstation_id INTEGER REFERENCES workstations(id) ON DELETE SET NULL"
     ))
     _conn.commit()
 
@@ -287,6 +290,114 @@ def _validate_external_orders(rows: List[dict]):
         "invalid_count": len(issues),
         "issues": issues,
     }
+
+
+def _extract_product_code_from_item(item: dict) -> str:
+    code_candidates = [
+        "cod_tidelli",
+        "cod",
+        "codigo",
+        "product_code",
+        "item_code",
+        "cod_produto",
+    ]
+    lowered = {str(key).lower(): value for key, value in (item or {}).items()}
+    for candidate in code_candidates:
+        value = lowered.get(candidate)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+
+    for _, value in lowered.items():
+        if isinstance(value, str) and value.strip() and len(value.strip()) <= 40:
+            return value.strip()
+
+    return ""
+
+
+def _extract_quantity_from_item(item: dict) -> float:
+    qty_candidates = ["quant", "qtd", "quantity", "quantidade", "qty"]
+    lowered = {str(key).lower(): value for key, value in (item or {}).items()}
+    for candidate in qty_candidates:
+        value = lowered.get(candidate)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return 1.0
+
+
+def _build_tasks_for_imported_order(order: models.ImportedOrder, db: Session) -> int:
+    created_tasks = 0
+    items = order.order_items or []
+
+    for item in items:
+        product_code = _extract_product_code_from_item(item)
+        if not product_code:
+            continue
+
+        product = db.query(models.Product).filter(models.Product.cod == product_code).first()
+        if not product:
+            continue
+
+        product_data = product.product_data or {}
+        material_type_ids = product_data.get("material_type_ids") or []
+        component_ids = product_data.get("component_ids") or []
+
+        if not material_type_ids:
+            continue
+
+        material_rows = (
+            db.query(models.MaterialTypes)
+            .filter(models.MaterialTypes.id.in_(material_type_ids))
+            .all()
+        )
+        workstation_ids = sorted({material.workstation_id for material in material_rows if material.workstation_id})
+        if not workstation_ids:
+            continue
+
+        item_qty = _extract_quantity_from_item(item)
+
+        for workstation_id in workstation_ids:
+            related_component = None
+            if component_ids:
+                related_component = (
+                    db.query(models.Component)
+                    .filter(
+                        models.Component.id.in_(component_ids),
+                        models.Component.material_id.in_(material_type_ids),
+                    )
+                    .first()
+                )
+
+            existing_task = (
+                db.query(models.ProductionTask)
+                .filter(
+                    models.ProductionTask.imported_order_id == order.id,
+                    models.ProductionTask.product_id == product.id,
+                    models.ProductionTask.workstation_id == workstation_id,
+                    models.ProductionTask.status.in_(["queued", "assigned", "in_progress"]),
+                )
+                .first()
+            )
+            if existing_task:
+                continue
+
+            new_task = models.ProductionTask(
+                imported_order_id=order.id,
+                external_order_id=order.external_id,
+                product_id=product.id,
+                component_id=related_component.id if related_component else None,
+                workstation_id=workstation_id,
+                quantity=item_qty,
+                status="queued",
+                source_item=item,
+            )
+            db.add(new_task)
+            created_tasks += 1
+
+    return created_tasks
 
 
 @app.get("/configs/", response_model=list[schemas.DatabaseConfigOut])
@@ -590,6 +701,23 @@ def queue_order_for_production(order_id: int, db: Session = Depends(get_db)):
     return order
 
 
+@app.post("/orders/imported/{order_id}/release-production", response_model=schemas.ReleaseOrderForProductionResponse)
+def release_order_for_production(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.ImportedOrder).filter(models.ImportedOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido importado não encontrado")
+
+    created_tasks = _build_tasks_for_imported_order(order, db)
+    order.import_status = "processing"
+    db.commit()
+
+    return {
+        "imported_order_id": order.id,
+        "created_tasks": created_tasks,
+        "detail": f"Pedido liberado para produção. {created_tasks} tarefas criadas.",
+    }
+
+
 @app.post("/orders/imported/{order_id}/complete", response_model=schemas.ImportedOrderOut)
 def complete_order(order_id: int, db: Session = Depends(get_db)):
     order = db.query(models.ImportedOrder).filter(models.ImportedOrder.id == order_id).first()
@@ -634,13 +762,19 @@ def get_material_types(db: Session = Depends(get_db)):
     """Listar pedidos que foram importados"""
     return db.query(models.MaterialTypes).all()
 
-@app.post("/material_types/", response_model=schemas.MaterialTypeCreate)
+@app.post("/material_types/", response_model=schemas.MaterialTypeOut)
 def create_material_type(material: schemas.MaterialTypeCreate, db: Session = Depends(get_db)):
     if db.query(models.MaterialTypes).filter(models.MaterialTypes.name == material.name).first():
         raise HTTPException(status_code=400, detail="material name already registered")
 
+    if material.workstation_id is not None:
+        workstation = db.query(models.Workstation).filter(models.Workstation.id == material.workstation_id).first()
+        if not workstation:
+            raise HTTPException(status_code=404, detail="Setor não encontrado")
+
     new_material = models.MaterialTypes(
-        name=material.name
+        name=material.name,
+        workstation_id=material.workstation_id,
     )
     db.add(new_material)
     db.commit()
@@ -648,7 +782,39 @@ def create_material_type(material: schemas.MaterialTypeCreate, db: Session = Dep
 
     return {
         "id": new_material.id,
-        "name": new_material.name
+        "name": new_material.name,
+        "workstation_id": new_material.workstation_id,
+    }
+
+
+@app.put("/material_types/{material_id}", response_model=schemas.MaterialTypeOut)
+def update_material_type(material_id: int, material: schemas.MaterialTypeUpdate, db: Session = Depends(get_db)):
+    db_material = db.query(models.MaterialTypes).filter(models.MaterialTypes.id == material_id).first()
+    if not db_material:
+        raise HTTPException(status_code=404, detail="Tipo de material não encontrado")
+
+    existing = (
+        db.query(models.MaterialTypes)
+        .filter(models.MaterialTypes.name == material.name, models.MaterialTypes.id != material_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="material name already registered")
+
+    if material.workstation_id is not None:
+        workstation = db.query(models.Workstation).filter(models.Workstation.id == material.workstation_id).first()
+        if not workstation:
+            raise HTTPException(status_code=404, detail="Setor não encontrado")
+
+    db_material.name = material.name
+    db_material.workstation_id = material.workstation_id
+    db.commit()
+    db.refresh(db_material)
+
+    return {
+        "id": db_material.id,
+        "name": db_material.name,
+        "workstation_id": db_material.workstation_id,
     }
 
 
@@ -855,6 +1021,80 @@ def delete_workstation(workstation_id: int, db: Session = Depends(get_db)):
 def get_departments(db: Session = Depends(get_db)):
     return db.query(models.Workstation).all()
 
+# -- ROTAS DE COMPONENTES ---
+
+@app.get("/components/", response_model=List[schemas.ComponentsOut])
+def list_components(db: Session = Depends(get_db)):
+    return db.query(models.Component).all()
+
+@app.post("/components/", response_model=schemas.ComponentsOut)
+def create_component(component: schemas.ComponentCreate, db: Session = Depends(get_db)):
+    if db.query(models.Component).filter(models.Component.cod == component.cod).first():
+        raise HTTPException(status_code=400, detail="cod component already registered")
+    
+    new_component = models.Component(
+        cod=component.cod,
+        desc=component.desc,
+        line=component.line,
+        material_id=component.material_id,
+        base_points=component.base_points
+    )
+    db.add(new_component)
+    db.commit()
+    db.refresh(new_component)
+
+    return {
+        "id": new_component.id,
+        "cod": new_component.cod,
+        "desc": new_component.desc,
+        "line": new_component.line,
+        "material_id": new_component.material_id,
+        "base_points": new_component.base_points,
+    }
+
+
+@app.put("/components/{component_id}", response_model=schemas.ComponentsOut)
+def update_component(component_id: int, component: schemas.ComponentUpdate, db: Session = Depends(get_db)):
+    db_component = db.query(models.Component).filter(models.Component.id == component_id).first()
+    if not db_component:
+        raise HTTPException(status_code=404, detail="Componente não encontrado")
+
+    existing = (
+        db.query(models.Component)
+        .filter(models.Component.cod == component.cod, models.Component.id != component_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="cod component already registered")
+
+    db_component.cod = component.cod
+    db_component.desc = component.desc
+    db_component.line = component.line
+    db_component.material_id = component.material_id
+    db_component.base_points = component.base_points
+
+    db.commit()
+    db.refresh(db_component)
+    return {
+        "id": db_component.id,
+        "cod": db_component.cod,
+        "desc": db_component.desc,
+        "line": db_component.line,
+        "material_id": db_component.material_id,
+        "base_points": db_component.base_points,
+    }
+
+
+@app.delete("/components/{component_id}")
+def delete_component(component_id: int, db: Session = Depends(get_db)):
+    db_component = db.query(models.Component).filter(models.Component.id == component_id).first()
+    if not db_component:
+        raise HTTPException(status_code=404, detail="Componente não encontrado")
+
+    db.delete(db_component)
+    db.commit()
+    return {"detail": "Componente deletado"}
+
 # --- ROTAS DE PRODUTOS ---
 
 @app.post("/products/", response_model=schemas.ProductOut)
@@ -925,6 +1165,181 @@ def delete_products(product_id: int, db: Session = Depends(get_db)):
     db.delete(db_product)
     db.commit()
     return {"detail": "Produto deletado"}
+
+
+@app.get("/production/tasks/", response_model=list[schemas.ProductionTaskOut])
+def list_production_tasks(
+    workstation_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.ProductionTask)
+    if workstation_id is not None:
+        query = query.filter(models.ProductionTask.workstation_id == workstation_id)
+    if user_id is not None:
+        query = query.filter(models.ProductionTask.assigned_user_id == user_id)
+    if status:
+        query = query.filter(models.ProductionTask.status == status)
+
+    return query.order_by(models.ProductionTask.created_at.desc()).all()
+
+
+@app.post("/production/tasks/{task_id}/assign", response_model=schemas.ProductionTaskOut)
+def assign_production_task(task_id: int, payload: schemas.AssignProductionTaskPayload, db: Session = Depends(get_db)):
+    task = db.query(models.ProductionTask).filter(models.ProductionTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+
+    user = db.query(models.User).filter(models.User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Operador não encontrado")
+
+    if user.workstation_id != task.workstation_id:
+        raise HTTPException(status_code=400, detail="Operador não pertence ao setor da tarefa")
+
+    task.assigned_user_id = payload.user_id
+    if task.status == "queued":
+        task.status = "assigned"
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@app.post("/production/tasks/{task_id}/start", response_model=schemas.ProductionTaskOut)
+def start_production_task(task_id: int, payload: schemas.StartProductionTaskPayload, db: Session = Depends(get_db)):
+    task = db.query(models.ProductionTask).filter(models.ProductionTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+
+    if task.status in ["in_progress", "completed"]:
+        raise HTTPException(status_code=400, detail="Tarefa já iniciada ou concluída")
+
+    if task.assigned_user_id and task.assigned_user_id != payload.user_id:
+        raise HTTPException(status_code=400, detail="Tarefa atribuída a outro operador")
+
+    task.assigned_user_id = payload.user_id
+    task.status = "in_progress"
+    task.started_at = datetime.datetime.utcnow()
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@app.post("/production/tasks/{task_id}/finish", response_model=schemas.ProductionTaskOut)
+def finish_production_task(task_id: int, payload: schemas.FinishProductionTaskPayload, db: Session = Depends(get_db)):
+    task = db.query(models.ProductionTask).filter(models.ProductionTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+
+    if task.status == "completed":
+        raise HTTPException(status_code=400, detail="Tarefa já concluída")
+
+    effective_user_id = payload.user_id or task.assigned_user_id
+    if not effective_user_id:
+        raise HTTPException(status_code=400, detail="Informe o operador para finalizar a tarefa")
+
+    user = db.query(models.User).filter(models.User.id == effective_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Operador não encontrado")
+
+    product = db.query(models.Product).filter(models.Product.id == task.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    task.assigned_user_id = effective_user_id
+    task.status = "completed"
+    if not task.started_at:
+        task.started_at = datetime.datetime.utcnow()
+    task.finished_at = datetime.datetime.utcnow()
+
+    new_log = models.ProductionLog(
+        user_id=effective_user_id,
+        workstation_id=task.workstation_id,
+        product_id=task.product_id,
+        quantity=task.quantity,
+        status="finished",
+    )
+    db.add(new_log)
+
+    points_earned = int((product.base_points or 0) * (task.quantity or 0))
+    user.total_points = (user.total_points or 0) + points_earned
+
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@app.get("/production/operators/{user_id}/summary")
+def get_operator_summary(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Operador não encontrado")
+
+    month_start = datetime.datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_logs = (
+        db.query(models.ProductionLog)
+        .filter(models.ProductionLog.user_id == user_id, models.ProductionLog.timestamp >= month_start)
+        .all()
+    )
+
+    month_points = 0
+    for log in month_logs:
+        product = db.query(models.Product).filter(models.Product.id == log.product_id).first()
+        if product:
+            month_points += int((product.base_points or 0) * (log.quantity or 0))
+
+    completed_tasks = (
+        db.query(func.count(models.ProductionTask.id))
+        .filter(models.ProductionTask.assigned_user_id == user_id, models.ProductionTask.status == "completed")
+        .scalar()
+        or 0
+    )
+
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "workstation_id": user.workstation_id,
+        "month_points": month_points,
+        "total_points": user.total_points or 0,
+        "completed_tasks": completed_tasks,
+    }
+
+
+@app.post("/production/material-requests/", response_model=schemas.MaterialRequisitionOut)
+def create_material_requisition(payload: schemas.MaterialRequisitionCreate, db: Session = Depends(get_db)):
+    task = db.query(models.ProductionTask).filter(models.ProductionTask.id == payload.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+
+    user = db.query(models.User).filter(models.User.id == payload.requested_by_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Operador não encontrado")
+
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantidade deve ser maior que zero")
+
+    request = models.MaterialRequisition(
+        task_id=payload.task_id,
+        requested_by_user_id=payload.requested_by_user_id,
+        quantity=payload.quantity,
+        notes=payload.notes,
+        status="pending",
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+    return request
+
+
+@app.get("/production/material-requests/", response_model=list[schemas.MaterialRequisitionOut])
+def list_material_requisitions(task_id: Optional[int] = None, status: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(models.MaterialRequisition)
+    if task_id is not None:
+        query = query.filter(models.MaterialRequisition.task_id == task_id)
+    if status:
+        query = query.filter(models.MaterialRequisition.status == status)
+    return query.order_by(models.MaterialRequisition.created_at.desc()).all()
 
 # --- ROTA DE REGISTRO DE PRODUÇÃO ---
 
