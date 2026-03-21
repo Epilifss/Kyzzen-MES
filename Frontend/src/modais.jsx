@@ -28,7 +28,7 @@ const resetDatabaseConfigForm = (setFormData, initialValue = null) => {
 export const ALL_PERMISSIONS = [
     { key: 'dashboard', label: 'Início (Dashboard)' },
     { key: 'orders', label: 'Pedidos' },
-    { key: 'products', label: 'Produtos' },
+    { key: 'registrations', label: 'Cadastros' },
     { key: 'users', label: 'Usuários' },
     { key: 'workstations', label: 'Setores' },
     { key: 'configs', label: 'Configurações de Banco' },

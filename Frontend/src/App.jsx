@@ -5,6 +5,7 @@ import Login from './Login';
 import Dashboard from './Dashboard';
 import Users from './Users';
 import Orders from './Orders';
+import Registrations from './registrations';
 import Products from './Products';
 import Workstations from './Workstations';
 import Sidebar from './Sidebar';
@@ -63,6 +64,17 @@ function App() {
             <PrivateRoute>
               <MainLayout>
                 <Products />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/registrations"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Registrations />
               </MainLayout>
             </PrivateRoute>
           }
